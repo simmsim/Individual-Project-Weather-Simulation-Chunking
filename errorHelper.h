@@ -1,10 +1,7 @@
+#include <CL/opencl.hpp>
 #include <stdlib.h>
 
-#ifdef __APPLE__
-#include <OpenCL/opencl.hpp>
-#else
-#include <CL/opencl.hpp>
-#endif
+const char* getErrorCodeDescription(cl_int errorCode);
 
 void testError(cl_int errorCode, char* description) 
 {

@@ -4,11 +4,13 @@ class Simulation {
     private:
         cl::Device device;
         cl::Context context;
+        char* name;
 
     public:
-        Simulation() = default;
+        cl::Program program;
+        cl::Kernel kernel;
 
-        ~Simulation();
+        void setName(char* Sname);
 
         void setDevice(cl::Device newDevice) {
             device = newDevice;
