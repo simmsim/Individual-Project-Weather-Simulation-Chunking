@@ -14,6 +14,8 @@ void fillAndChunk(float *inputArray, float *outputAray) {
     int jChunk = 4;
     int kChunk = 2;
 
+    int chSize = iChunk*jChunk*kChunk;
+
     int iHalChunk = 4;
     int jHalChunk = 6;
     int kHalChunk = 4;
@@ -23,7 +25,10 @@ void fillAndChunk(float *inputArray, float *outputAray) {
     for (int k_start = 0; k_start < kDim; k_start += kChunk) {  //k_start = 0
         for (int j_start = 0; j_start < jDim; j_start += jChunk) { //j_start = 0
             for (int i_start = 0; i_start < iDim; i_start += iChunk) {  //i_start = 2
+                // input chunk
                 float *ch1 = (float*)malloc(sizeof(float)*chHSize);
+                // output chunk
+                float *ch2 = (float*)malloc(sizeof(float)*chSize);
                 std::fill(ch1, ch1+(chHSize), 0.0);
 
                 for (int k = 0; k < kHalChunk; k++) { // k = 0
@@ -54,7 +59,11 @@ void fillAndChunk(float *inputArray, float *outputAray) {
                                 int chunkIdx = k*iHalChunk*jHalChunk + i*jHalChunk + j;
                             #endif
 
-                            ch1[chunkIdx] = inputArray[inputArrayIdx] * 2;
+                            ch1[chunkIdx] = inputArray[inputArrayIdx]*2;
+                            // Once ch1 is filled with values and correctly padded with halo, send it to kernel...
+                            // there, haloes will be updated accordingly based on appropriate boundary conditions
+                            // calculations on core values will be places to ch2, and ch2 will be coppied back
+                            // to the host
                         }
                     }
                 }
@@ -66,23 +75,15 @@ void fillAndChunk(float *inputArray, float *outputAray) {
                 std::cout << "\n\n" << "";
 
                 // integrate chunk into output_array
-                // since it's 1D, just do a memset
+                // this is done assuming that the
                 for (int k = 1; k < kHalChunk - 1; k++) { // k = 0
                     for (int j = 1; j < jHalChunk - 1; j++) {
                         for (int i = 1; i < iHalChunk - 1; i++) {
                             int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + i;
                             int outputArrayIdx = (k-1+k_start)*iDim*jDim + (j-1+j_start)*iDim + (i-1+i_start);
-                           //int outputArrayIdx = (k-1)*iDim*jDim + (j-1)*iDim + i-1;
+                            // this ch1 should actually be ch2 with only core values, without halo; with no halo
+                            // we could just copy the hole thing, not point by point
                             outputAray[outputArrayIdx] = ch1[chunkIdx];
-                            /*
-                            int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + i;
-                            int first = ch1[chunkIdx];
-                            int second = ch1[chunkIdx+iChunk];
-                            int arrayEnd = (i-1)*iDim;
-                            std::copy(ch1 + chunkIdx, ch1 + chunkIdx + iChunk, outputAray+arrayEnd);
-                            std::cout << chunkIdx << " -> ";
-                            std::cout << chunkIdx + iChunk << "\n";
-                            */
                         }
                     }
                 }
