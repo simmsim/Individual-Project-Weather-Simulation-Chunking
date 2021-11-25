@@ -3,12 +3,17 @@
 
 const char* getErrorCodeDescription(cl_int errorCode);
 
+void printError(cl_int errorCode, char* description) {
+    printf("Error: %s. Error code %d: %s", description, 
+        errorCode, getErrorCodeDescription(errorCode));
+}
+
 void testError(cl_int errorCode, char* description) 
 {
     if (errorCode != CL_SUCCESS) 
     {
-        printf("Error: %s. Error code %d: %s", description, 
-        errorCode, getErrorCodeDescription(errorCode));
+        printError(errorCode, description);
+        exit(EXIT_FAILURE);
     }
 }
 

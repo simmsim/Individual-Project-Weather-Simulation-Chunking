@@ -1,30 +1,22 @@
-#include <CL/opencl.hpp>
+#include "OCLSetup.h"
 
 class Simulation {
     private:
-        cl::Device device;
-        cl::Context context;
-        char* name;
+        OCLSetup oclSetup;
 
     public:
-        cl::Program program;
-        cl::Kernel kernel;
+        Simulation(int deviceType, char * programFileName,
+                    char * kernelName);
 
-        void setName(char* Sname);
 
-        void setDevice(cl::Device newDevice) {
-            device = newDevice;
-        }
-
-        void setContext(cl::Context newContext) {
-            context = newContext;
-        }
-
-        cl::Device getDevice() {
-            return device;
-        }
-
-        cl::Context getContext() {
-            return context;
-        }
+        // might split this up
+        // TODO: deal with loop ordering? does user specify 
+        // loop ordering expliclty?
+        // TODO :for dimensions (simulation's and chunk's), could do something similar do NDRange?
+        // TODO: is it always 1 point halo or do we generalize and allow
+        // the user to specify the n-point halo?
+        void ChunkAndCompute(float * p1, float * p2,
+        int iDim, int jDim, int kDim, int iChunk, int jChunk, 
+        int kChunk);
+        
 };

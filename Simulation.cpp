@@ -1,11 +1,6 @@
 #include "Simulation.h"
 
-/*
-Simulation::Simulation(char* Sname) {
-    setName(name);
+Simulation::Simulation(int deviceType, char * programFileName,
+                    char * kernelName) {
+    OCLSetup(deviceType, programFileName, kernelName);
 }
-
-void Simulation::setName(char* Sname) {
-    name = Sname;
-}
-*/
