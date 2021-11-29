@@ -68,3 +68,4 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
     kernel = cl::Kernel(program, kernelName, &errorCode);
     testError(errorCode, "Failed to create the kernel");
 }
+

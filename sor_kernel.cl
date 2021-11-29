@@ -130,8 +130,9 @@ __kernel void sor_superkernel(__global float *p_in, __global float *p_out, int s
     switch (state) {
         case CORE:
             compute_core_region(p_in, p_out);
+            break;
         case PERIODIC:
-            compute_periodic_condition(p_in);
+           // compute_periodic_condition(p_in);
             break;
         case INFLOW:
             compute_inflow_condition(p_in);

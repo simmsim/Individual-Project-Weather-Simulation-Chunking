@@ -17,7 +17,7 @@ class OCLSetup {
             // if specified type not available, just default to 
             // what's available :-)
             std::string deviceName;
-            cl_ulong maxMemAllocSize;
+            long maxMemAllocSize;
             // TODO: Later, add any properties needed
             // to determine optimal chunk size; 
             // or to check if user's not exceeding available
