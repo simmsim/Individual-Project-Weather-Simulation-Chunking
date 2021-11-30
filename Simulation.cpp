@@ -21,7 +21,7 @@ void Simulation::InitializeSimulationArea(cl_float2 * p, int halo, SimulationRan
     simulationArea.coreDimensions = coreDimensions;
     simulationArea.chunkDimensions = chunkDimensions;
 
-    // TODO: will need to come back to this... 2D and 1D don't need halos in all directions
+    // TODO: will need to come back to this... 2D and 1D problems don't need halos in all directions
     int iHalChunk = chunkDimensions.getDimSizes()[0] + halo;
     int jHalChunk = chunkDimensions.getDimSizes()[1] + halo;
     int kHalChunk = chunkDimensions.getDimSizes()[2] + halo;
@@ -41,7 +41,7 @@ void Simulation::CheckSpecifiedChunkSize() {
 }
 
 void Simulation::RunSimulation() {
-
+    
 }
 
 

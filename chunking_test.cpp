@@ -8,16 +8,19 @@
 void computePeriodic(float * ch1);
 void computeCore(float * ch1, float * ch2);
 
-void fillAndChunk(float *inputArray, float *outputAray) {
+void fillAndChunk(float *p, float *outputAray) {
     int iDim = 4;
     int jDim = 4;
     int kDim = 2;
+
+    int coreSize = iDim*jDim*kDim;
 
     int iChunk = 2;
     int jChunk = 4;
     int kChunk = 2;
 
     int chSize = iChunk*jChunk*kChunk;
+    int noOfChunks = coreSize/chSize;
 
     int iHalChunk = 4;
     int jHalChunk = 6;
@@ -25,9 +28,13 @@ void fillAndChunk(float *inputArray, float *outputAray) {
 
     int chHSize = iHalChunk*jHalChunk*kHalChunk;
 
-    for (int k_start = 0; k_start < kDim; k_start += kChunk) {  //k_start = 0
-        for (int j_start = 0; j_start < jDim; j_start += jChunk) { //j_start = 0
-            for (int i_start = 0; i_start < iDim; i_start += iChunk) {  //i_start = 2
+    float * inputArray = p;
+    int timeIterations = 2;
+
+    for (int n = 0; n < timeIterations; n++) {
+            for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
+        for (int j_start = 0; j_start < jDim; j_start += jChunk) {
+            for (int i_start = 0; i_start < iDim; i_start += iChunk) {  
                 // input chunk
                 float *ch1 = (float*)malloc(sizeof(float)*chHSize);
                 std::fill(ch1, ch1+(chHSize), 0.0);
@@ -35,7 +42,7 @@ void fillAndChunk(float *inputArray, float *outputAray) {
                 float *ch2 = (float*)malloc(sizeof(float)*chHSize);
                 std::fill(ch2, ch2+(chHSize), 0.0);
 
-                for (int k = 0; k < kHalChunk; k++) { // k = 0
+                for (int k = 0; k < kHalChunk; k++) {
                     if ((k_start == 0 && k == 0) ||
                         (k_start + kChunk == kDim && k + 1 == kHalChunk)) {
                             // this is halo for bottom plane or top plane; leave as zeroes
@@ -81,8 +88,8 @@ void fillAndChunk(float *inputArray, float *outputAray) {
                 std::cout << "\n\n" << "";
                 
                 // Then compute something (increment by 1 or smt...)
-               
                 computeCore(ch1, ch2);
+                // Again, for testing purposes. Remove once integrated to the api.
                 std::cout << "\nCore\n" << "";
                 for (int idx = 0; idx < chHSize; idx++) {
                     std::cout << ch2[idx] << " ";
@@ -90,45 +97,34 @@ void fillAndChunk(float *inputArray, float *outputAray) {
                 std::cout << "\n\n" << "";
                 
 
-                // integrate chunk into output_array
-                // this is done assuming that the
-                for (int k = 1; k < kHalChunk - 1; k++) { // k = 0
+                // Integrate chunk into the core region of the problem.
+                // This is performed assuming 3D problem, where we can't copy in one go, since
+                // chunks are not contiguous.
+                for (int k = 1; k < kHalChunk - 1; k++) { 
                     for (int j = 1; j < jHalChunk - 1; j++) {
-                       // for (int i = 1; i < iHalChunk - 1; i++) {
-                            int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
-                            // j =1; chunkIdx = 24 + 4 + 1 = 29
-                            // j =2; chunkIx = 24 + 8 + 1= 33
-                            //int outputArrayIdx = (k-1+k_start)*iDim*jDim + (j-1+j_start)*iDim + (i-1+i_start);
-                            int first = ch2[chunkIdx];
-                            int second = ch2[chunkIdx+iChunk];
-                            int arrayEnd = i_start + (j-1)*iChunk*2 + (k-1)*iChunk*jChunk*2; // 2 should be no of chunks
-                            std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
-                            int outputArraySize = iDim*jDim*kDim;
-
-                            std::cout << "\n Ouput array at " << j << "\n";
-                            for (int x = 0; x < outputArraySize; x++) {
-                                float number = outputAray[x];
-                                std::cout << number << " ";
-                            }
-                            std::cout << "end of output array\n" << "";
-                           // outputAray[outputArrayIdx] = ch1[chunkIdx];
-                        //}
+                        int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
+                        // Find the right location to place the contiguous "cutout" from chunk.
+                        int arrayEnd = i_start + (j-1)*iChunk*noOfChunks + (k-1)*iChunk*jChunk*noOfChunks; 
+                        std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
+                        // This printing is for testing purposes just now. Remove later.
+                        int outputArraySize = iDim*jDim*kDim;
+                        std::cout << "\n Ouput array at " << j << "\n";
+                        for (int x = 0; x < outputArraySize; x++) {
+                            float number = outputAray[x];
+                            std::cout << number << " ";
+                        }
+                        std::cout << "\n";
                     }
                 }
-
-                //for (int x = (iHalChunk*jHalChunk)+iHalChunk+1; x < 96-iHalChunk*jHalChunk; x+)
-
-                /*
-                int chunkSize = iChunk*jChunk*kChunk;
-                for (int idx = 0; idx < chunkSize; idx++) {
-                    float number = outputAray[idx];
-                }
-                */
-
+                // Fly away and be free.
                 free(ch1);
                 free(ch2);
             }
         }
+    }
+    // the output array becomes our problem/input array for next iteration
+    inputArray = outputAray;
+    outputAray = p;
     }
 }
 
@@ -213,13 +209,12 @@ int main(void) {
     }
 
     fillAndChunk(inputArray, outputArray);
-
     for (int idx = 0; idx < inputArraySize; idx++) {
-        float number = outputArray[idx];
+        float number = inputArray[idx];
         std::cout << number << " ";
     }
 
+    // Fly away and be free
     free(outputArray);
     free(inputArray);
-
 }
