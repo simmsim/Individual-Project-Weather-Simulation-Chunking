@@ -9,7 +9,7 @@ class Simulation {
 
     public:
         struct simulationArea {
-            cl_float2 *p;
+            cl_float *p;
             int halo;
             SimulationRange coreDimensions;
             SimulationRange chunkDimensions;
@@ -24,14 +24,15 @@ class Simulation {
         // loop ordering expliclty?
         // TODO: is it always 1 point halo or do we generalize and allow
         // the user to specify the n-point halo?
-        void ChunkAndCompute(cl_float2 * p, int halo,
+        void ChunkAndCompute(cl_float * p, int halo,
                              SimulationRange coreDimensions,
                              SimulationRange chunkDimensions);
 
-        void InitializeSimulationArea(cl_float2 * p, int halo, SimulationRange coreDimensions,
+        void InitializeSimulationArea(cl_float * p, int halo, SimulationRange coreDimensions,
                             SimulationRange chunkDimensions);
 
         void CheckSpecifiedChunkSize();
+        bool ChunkExceedsCoreDimensions();
 
         void RunSimulation();
 

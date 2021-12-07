@@ -7,15 +7,15 @@ Simulation::Simulation(int deviceType, char * programFileName,
     OCLSetup(deviceType, programFileName, kernelName);
 }
 
-void Simulation::ChunkAndCompute(cl_float2 * p, int halo, SimulationRange coreDimensions, SimulationRange chunkDimensions) {
+void Simulation::ChunkAndCompute(cl_float * p, int halo, SimulationRange coreDimensions, 
+                                 SimulationRange chunkDimensions) {
     InitializeSimulationArea(p, halo, coreDimensions, chunkDimensions);
-    // TODO: check that coreDimensions and chunkDimensions makes sense.
-    // For example, chunk dim is not larger than core dim; 
     CheckSpecifiedChunkSize();
     RunSimulation();
 }
 
-void Simulation::InitializeSimulationArea(cl_float2 * p, int halo, SimulationRange coreDimensions, SimulationRange chunkDimensions) {
+void Simulation::InitializeSimulationArea(cl_float * p, int halo, SimulationRange coreDimensions, 
+                                          SimulationRange chunkDimensions) {
     simulationArea.p = p;
     simulationArea.halo = halo;
     simulationArea.coreDimensions = coreDimensions;
@@ -30,18 +30,44 @@ void Simulation::InitializeSimulationArea(cl_float2 * p, int halo, SimulationRan
 
 void Simulation::CheckSpecifiedChunkSize() {
     long maxMem = oclSetup.deviceProperties.maxMemAllocSize * 0.95;
-    // size of the 4D twinned buffer
-    int chunkSize = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(long) * 2;
+    int chunkSize = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(long);
     if (chunkSize > maxMem) {
         std::cout << "Provided chunk size exceeds device's memory allocation size. Chunk size: " 
                   << chunkSize << " available memory allocation size: " 
-                  << maxMem << ".\n Chunk size will be determined automatically." << std::endl; 
-        // TODO: determine chunk size;
+                  << maxMem << ".\n New chunk size will be determined automatically." << std::endl; 
+    } else if (ChunkExceedsCoreDimensions()) {
+        std::cout << "Provided chunk dimensions exceed core dimensions. "
+                  << "New chunk size will be determined automatically." << std::endl;
+    } else {
+        // Provided chunk size was appropriate; continue
+        return;
     }
+
+    ReconfigureChunkSize();
+}
+
+bool Simulation::ChunkExceedsCoreDimensions() {
+    int coreDimensions = simulationArea.coreDimensions.getDimensions();
+    int chunkDimensions = simulationArea.chunkDimensions.getDimensions();
+
+    if (coreDimensions != chunkDimensions) {
+        std::cout << "Core and chunk must have the same dimensions, but provided core dimensions {"
+                  << coreDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different. "
+                  << "Terminating." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    int * coreDimSizes = simulationArea.coreDimensions.getDimSizes();
+    int * chunkDimSizes = simulationArea.chunkDimensions.getDimSizes();
+    for (int i = 0; i < coreDimensions; i++) {
+        if (chunkDimSizes[i] > coreDimSizes[i]) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void Simulation::RunSimulation() {
     
 }
-
-
