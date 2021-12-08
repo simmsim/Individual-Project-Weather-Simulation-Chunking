@@ -33,7 +33,7 @@ class Simulation {
 
         void CheckSpecifiedChunkSize();
         bool ChunkExceedsCoreDimensions();
-
+        void ReconfigureChunkSize();
         void RunSimulation();
 
 };

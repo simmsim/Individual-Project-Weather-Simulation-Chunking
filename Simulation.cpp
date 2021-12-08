@@ -7,8 +7,10 @@ Simulation::Simulation(int deviceType, char * programFileName,
     OCLSetup(deviceType, programFileName, kernelName);
 }
 
+// TODO: rename this method to RunSimulation and that other method inside of it to ChunkAndCompute!
 void Simulation::ChunkAndCompute(cl_float * p, int halo, SimulationRange coreDimensions, 
                                  SimulationRange chunkDimensions) {
+    // TODO: chunkDimensions argument should be optional; if it's not specified, the chunk dims = coredims
     InitializeSimulationArea(p, halo, coreDimensions, chunkDimensions);
     CheckSpecifiedChunkSize();
     RunSimulation();
@@ -66,6 +68,10 @@ bool Simulation::ChunkExceedsCoreDimensions() {
     }
 
     return false;
+}
+
+void Simulation::ReconfigureChunkSize() {
+
 }
 
 void Simulation::RunSimulation() {
