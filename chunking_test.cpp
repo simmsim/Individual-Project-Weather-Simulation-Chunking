@@ -32,99 +32,97 @@ void fillAndChunk(float *p, float *outputAray) {
     int timeIterations = 2;
 
     for (int n = 0; n < timeIterations; n++) {
-            for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
-        for (int j_start = 0; j_start < jDim; j_start += jChunk) {
-            for (int i_start = 0; i_start < iDim; i_start += iChunk) {  
-                // input chunk
-                float *ch1 = (float*)malloc(sizeof(float)*chHSize);
-                std::fill(ch1, ch1+(chHSize), 0.0);
-                // output chunk
-                float *ch2 = (float*)malloc(sizeof(float)*chHSize);
-                std::fill(ch2, ch2+(chHSize), 0.0);
+        for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
+            for (int j_start = 0; j_start < jDim; j_start += jChunk) {
+                for (int i_start = 0; i_start < iDim; i_start += iChunk) {  
+                    // input chunk
+                    float *ch1 = (float*)malloc(sizeof(float)*chHSize);
+                    std::fill(ch1, ch1+(chHSize), 0.0);
+                    // output chunk
+                    float *ch2 = (float*)malloc(sizeof(float)*chHSize);
+                    std::fill(ch2, ch2+(chHSize), 0.0);
 
-                for (int k = 0; k < kHalChunk; k++) {
-                    if ((k_start == 0 && k == 0) ||
-                        (k_start + kChunk == kDim && k + 1 == kHalChunk)) {
+                    for (int k = 0; k < kHalChunk; k++) {
+                        if (((k_start == 0 && k == 0) ||
+                            (k_start + kChunk == kDim && k + 1 == kHalChunk)) && kDim > 1) {
                             // this is halo for bottom plane or top plane; leave as zeroes
                             continue;
                         }
 
-                    for (int j = 0; j < jHalChunk; j++) {
-                        if ((j_start == 0 && j == 0) ||
-                            (j_start + jChunk == jDim && j + 1 == jHalChunk)) {
+                        for (int j = 0; j < jHalChunk; j++) {
+                            if (((j_start == 0 && j == 0) ||
+                                (j_start + jChunk == jDim && j + 1 == jHalChunk)) && jDim > 1) {
                                 continue;
                             }
 
-                        for (int i = 0; i < iHalChunk; i++) {
-                            if (((i_start == 0) && i == 0) ||
-                                (i_start + iChunk == iDim && i + 1 == iHalChunk)) {
+                            for (int i = 0; i < iHalChunk; i++) {
+                                if (((i_start == 0) && i == 0) ||
+                                    (i_start + iChunk == iDim && i + 1 == iHalChunk)) {
                                     continue;
-                                }
+                                }   
                             
-                            #if defined(COLUMN_MAJOR)
-                                int inputArrayIdx = (k-1+k_start)*iDim*jDim + (j-1+j_start)*iDim + (i-1+i_start);
-                                //int chunkIdx = (k+k_start)*iHalChunk*jHalChunk + (j+j_start)*iHalChunk + (i + i_start);
-                                int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + i;
-                            #else // ROW MAJOR
-                                int inputArrayIdx = (k-1+k_start)*iDim*jDim + (i-1+i_start)*jDim + (j-1+j_start);
-                                int chunkIdx = k*iHalChunk*jHalChunk + i*jHalChunk + j;
-                            #endif
+                                #if defined(COLUMN_MAJOR)
+                                    int inputArrayIdx = i-1+i_start;
+                                    if (jDim > 1) {
+                                        inputArrayIdx += (j-1+j_start)*iDim;
+                                    }
+                                    if (kDim > 1) {
+                                        inputArrayIdx += (k-1+k_start)*iDim*jDim;
+                                    }
+                                    //int inputArrayIdx = (k-1+k_start)*iDim*jDim + (j-1+j_start)*iDim + (i-1+i_start);
+                                    int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + i;
+                                #else // ROW MAJOR
+                                    int inputArrayIdx = (k-1+k_start)*iDim*jDim + (i-1+i_start)*jDim + (j-1+j_start);
+                                    int chunkIdx = k*iHalChunk*jHalChunk + i*jHalChunk + j;
+                                #endif
 
-                            ch1[chunkIdx] = inputArray[inputArrayIdx];
-                            // Once ch1 is filled with values and correctly padded with halo, send it to kernel...
-                            // there, haloes will be updated accordingly based on appropriate boundary conditions
-                            // calculations on core values will be places to ch2, and ch2 will be coppied back
-                            // to the host
+                                ch1[chunkIdx] = inputArray[inputArrayIdx];
+                                // Once ch1 is filled with values and correctly padded with halo, send it to kernel...
+                                // there, haloes will be updated accordingly based on appropriate boundary conditions
+                                // calculations on core values will be places to ch2, and ch2 will be coppied back
+                                // to the host
+                            }
                         }
                     }
-                }
 
-                computePeriodic(ch1);
+                    computePeriodic(ch1);
+                    computeCore(ch1, ch2);
+                    // Again, for testing purposes. Remove once integrated to the api.
+                    std::cout << "\nCore\n" << "";
+                    for (int idx = 0; idx < chHSize; idx++) {
+                        std::cout << ch2[idx] << " ";
+                    }
+                    std::cout << "\n\n" << "";
 
-                // print out chunk
-                for (int idx = 0; idx < chHSize; idx++) {
-                    std::cout << ch1[idx] << " ";
-                }
-                std::cout << "\n\n" << "";
-                
-                // Then compute something (increment by 1 or smt...)
-                computeCore(ch1, ch2);
-                // Again, for testing purposes. Remove once integrated to the api.
-                std::cout << "\nCore\n" << "";
-                for (int idx = 0; idx < chHSize; idx++) {
-                    std::cout << ch2[idx] << " ";
-                }
-                std::cout << "\n\n" << "";
-                
-
-                // Integrate chunk into the core region of the problem.
-                // This is performed assuming 3D problem, where we can't copy in one go, since
-                // chunks are not contiguous.
-                for (int k = 1; k < kHalChunk - 1; k++) { 
-                    for (int j = 1; j < jHalChunk - 1; j++) {
-                        int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
-                        // Find the right location to place the contiguous "cutout" from chunk.
-                        int arrayEnd = i_start + (j-1)*iChunk*noOfChunks + (k-1)*iChunk*jChunk*noOfChunks; 
+                    if (kDim == 1 && jDim == 1) {
+                        int arrayEnd = i_start;
+                        int chunkIdx = 1;
                         std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
-                        // This printing is for testing purposes just now. Remove later.
-                        int outputArraySize = iDim*jDim*kDim;
-                        std::cout << "\n Ouput array at " << j << "\n";
-                        for (int x = 0; x < outputArraySize; x++) {
-                            float number = outputAray[x];
-                            std::cout << number << " ";
+                    } else if (kDim == 1) {
+                        for (int j = 1; j < jHalChunk - 1; j++) {
+                            int chunkIdx = j*iHalChunk + 1;
+                            int arrayEnd = (j-1)*iChunk*noOfChunks + i_start;
+                            std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
                         }
-                        std::cout << "\n";
+                    } else {
+                        for (int k = 1; k < kHalChunk - 1; k++) { 
+                            for (int j = 1; j < jHalChunk - 1; j++) {
+                                int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
+                                int arrayEnd = i_start + (j-1)*iChunk*noOfChunks + (k-1)*iChunk*jChunk*noOfChunks;
+                                std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
+                            }
+                        }
                     }
+
+                    // Fly away and be free.
+                    free(ch1);
+                    free(ch2);
                 }
-                // Fly away and be free.
-                free(ch1);
-                free(ch2);
             }
         }
-    }
-    // the output array becomes our problem/input array for next iteration
-    inputArray = outputAray;
-    outputAray = p;
+        // the output array becomes our problem/input array for next iteration
+        inputArray = outputAray;
+        outputAray = p;
     }
 }
 
