@@ -9,8 +9,7 @@ Simulation::Simulation(int deviceType, char * programFileName,
 
 // TODO: rename this method to RunSimulation and that other method inside of it to ChunkAndCompute!
 void Simulation::ChunkAndCompute(cl_float * p, int halo, SimulationRange coreDimensions, 
-                                 SimulationRange chunkDimensions) {
-    // TODO: chunkDimensions argument should be optional; if it's not specified, the chunk dims = coredims
+                                 SimulationRange chunkDimensions = SimulationRange()) {
     InitializeSimulationArea(p, halo, coreDimensions, chunkDimensions);
     CheckSpecifiedChunkSize();
     RunSimulation();
@@ -21,13 +20,9 @@ void Simulation::InitializeSimulationArea(cl_float * p, int halo, SimulationRang
     simulationArea.p = p;
     simulationArea.halo = halo;
     simulationArea.coreDimensions = coreDimensions;
-    simulationArea.chunkDimensions = chunkDimensions;
-
-    // TODO: will need to come back to this... 2D and 1D problems don't need halos in all directions
-    int iHalChunk = chunkDimensions.getDimSizes()[0] + halo;
-    int jHalChunk = chunkDimensions.getDimSizes()[1] + halo;
-    int kHalChunk = chunkDimensions.getDimSizes()[2] + halo;
-    simulationArea.halChunkDimensions = SimulationRange(iHalChunk, jHalChunk, kHalChunk);
+    simulationArea.chunkDimensions = (chunkDimensions.getDimSizes() == 0) ? SimulationRange(coreDimensions) : chunkDimensions;
+    simulationArea.halChunkDimensions = SimulationRange(chunkDimensions);
+    simulationArea.halChunkDimensions.incrementDimensionsBy(halo);
 }
 
 void Simulation::CheckSpecifiedChunkSize() {
