@@ -29,16 +29,15 @@ void Simulation::CheckSpecifiedChunkSize() {
     int chunkSize = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(long);
     if (chunkSize > maxMem) {
         std::cout << "Provided chunk size exceeds device's memory allocation size. Chunk size: " 
-                  << chunkSize << " available memory allocation size: " 
-                  << maxMem << ".\n New chunk size will be determined automatically." << std::endl; 
+                  << chunkSize << " available memory allocation size: " << maxMem; 
     } else if (ChunkExceedsCoreDimensions()) {
-        std::cout << "Provided chunk dimensions exceed core dimensions. "
-                  << "New chunk size will be determined automatically." << std::endl;
+        std::cout << "Provided chunk dimensions exceed core dimensions. ";
     } else {
         // Provided chunk size was appropriate; continue
         return;
     }
 
+    std::cout << "\nNew chunk size will be determined automatically.\n";
     ReconfigureChunkSize();
 }
 

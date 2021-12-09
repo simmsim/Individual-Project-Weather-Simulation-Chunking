@@ -25,15 +25,15 @@ void OCLSetup::CreateContext() {
         exit(EXIT_FAILURE);
     }
 
-    platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &platformDevices);
-    testError(platformDevices.size() > 0 ? CL_SUCCESS : -1, 
-                "Failed to find any devices on platform");
-    // TODO: 1.try and pick device specified by the user if possible;
-    // 2. If user did not provide device, try to pick gpu
-    // 3. If no GPU, pick CPU
-    // For now just getting the first device
+    cl_device_type deviceType = deviceProperties.deviceType == 0 ? CL_DEVICE_TYPE_CPU : CL_DEVICE_TYPE_GPU;
+    platforms[0].getDevices(deviceType, &platformDevices);
+    if (platformDevices.size() == 0) {
+        std::cout << "No devices found for the type: " << deviceType << " . Looking for other devices...";
+        platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &platformDevices);
+        testError(platformDevices.size() > 0 ? CL_SUCCESS : -1, "Failed to find any devices on platform");
+    }
+
     device = platformDevices[0];
-    // TODO: error handling
     context = cl::Context(device);
 }
 
