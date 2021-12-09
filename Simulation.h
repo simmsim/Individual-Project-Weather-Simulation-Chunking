@@ -24,7 +24,7 @@ class Simulation {
         // loop ordering expliclty?
         // TODO: is it always 1 point halo or do we generalize and allow
         // the user to specify the n-point halo?
-        void ChunkAndCompute(cl_float * p, int halo,
+        void RunSimulation(cl_float * p, int halo,
                              SimulationRange coreDimensions,
                              SimulationRange chunkDimensions);
 
@@ -34,6 +34,6 @@ class Simulation {
         void CheckSpecifiedChunkSize();
         bool ChunkExceedsCoreDimensions();
         void ReconfigureChunkSize();
-        void RunSimulation();
+        void ChunkAndCompute();
 
 };
