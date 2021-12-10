@@ -8,13 +8,13 @@
 
 OCLSetup::OCLSetup(int deviceType, char * programFileName,
                     char * kernelName) {
-    CreateContext();
+    CreateContext(deviceType);
     SetDeviceProperties();
     CreateCommandQueue();
     CreateKernelFromProgram(programFileName, kernelName);
 }
 
-void OCLSetup::CreateContext() {
+void OCLSetup::CreateContext(int deviceType_) {
     std::vector<cl::Platform> platforms;
     std::vector<cl::Device> platformDevices;
     cl_int errorCode;
@@ -25,10 +25,11 @@ void OCLSetup::CreateContext() {
         exit(EXIT_FAILURE);
     }
 
-    cl_device_type deviceType = deviceProperties.deviceType == 0 ? CL_DEVICE_TYPE_CPU : CL_DEVICE_TYPE_GPU;
+    cl_device_type deviceType = deviceType_ == CPU ? CL_DEVICE_TYPE_CPU : CL_DEVICE_TYPE_GPU;
     platforms[0].getDevices(deviceType, &platformDevices);
     if (platformDevices.size() == 0) {
-        std::cout << "No devices found for the type: " << deviceType << " . Looking for other devices...";
+        // deviceType is only a number. TODO: nitpick, provide with device type name
+        std::cout << "No devices found for the type: " << deviceType << ". Will use any other available device\n";
         platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &platformDevices);
         testError(platformDevices.size() > 0 ? CL_SUCCESS : -1, "Failed to find any devices on platform");
     }
@@ -45,7 +46,6 @@ void OCLSetup::SetDeviceProperties() {
 void OCLSetup::CreateCommandQueue() {
     cl_int errorCode;
     commandQueue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &errorCode);
-    // TODO: more specific descriptions, specify device?
     testError(errorCode, "Failed to create command queue for the device");
 }
 
@@ -63,9 +63,11 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
             );
 
     cl::Program::Sources source(1, std::make_pair(prog.c_str(), prog.length()+1));
-    cl::Program program(context, source, &errorCode); 
+    cl::Program kernelProgram(context, source, &errorCode); 
     testError(errorCode, "Failed to create the program");
+    errorCode = kernelProgram.build(device);
+    testError(errorCode, "Failed to build the program");
+    program = kernelProgram;
     kernel = cl::Kernel(program, kernelName, &errorCode);
     testError(errorCode, "Failed to create the kernel");
 }
-

@@ -3,6 +3,7 @@
 
 #define CPU 0
 #define GPU 1
+#define CL_HPP_TARGET_OPENCL_VERSION 200
 
 class OCLSetup {
     public:
@@ -13,9 +14,7 @@ class OCLSetup {
         cl::CommandQueue commandQueue;
 
         struct deviceProperties {
-            int deviceType; // User defines to use CPU or GPU, 
-            // if specified type not available, just default to 
-            // what's available :-)
+            int deviceType; 
             std::string deviceName;
             long maxMemAllocSize;
             // TODO: Later, add any properties needed
@@ -26,14 +25,11 @@ class OCLSetup {
 
         OCLSetup() = default;
         OCLSetup(int deviceType, char * programFileName,
-                    char * kernelName);
+                 char * kernelName);
 
-        void CreateContext();
+        void CreateContext(int deviceType);
         void SetDeviceProperties();
         void CreateCommandQueue();
         void CreateKernelFromProgram(char * programFileName, 
-                    char * kernelName);
-
-                    
-
+                                     char * kernelName);
 };
