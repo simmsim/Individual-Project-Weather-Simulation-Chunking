@@ -1,18 +1,19 @@
 #include <CL/opencl.hpp>
 #include <stdlib.h>
+#include <string>
 
 const char* getErrorCodeDescription(cl_int errorCode);
 
-void printError(cl_int errorCode, char* description) {
+void printError(cl_int errorCode, const char* description) {
     printf("Error: %s. Error code %d: %s", description, 
         errorCode, getErrorCodeDescription(errorCode));
 }
 
-void testError(cl_int errorCode, char* description) 
+void testError(cl_int errorCode, std::string description) 
 {
     if (errorCode != CL_SUCCESS) 
     {
-        printError(errorCode, description);
+        printError(errorCode, description.c_str());
         exit(EXIT_FAILURE);
     }
 }
