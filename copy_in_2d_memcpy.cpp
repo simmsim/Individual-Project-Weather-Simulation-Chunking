@@ -11,24 +11,25 @@ void computeCore(float * ch1, float * ch2);
 void simpleCompute(float * ch1, float * ch2);
 
 void fillAndChunk(float *p, float *outputAray) {
-    int iDim = 40;
+    int iDim = 4;
     int jDim = 4;
-    int kDim = 1;
+    int kDim = 3;
 
     int coreSize = iDim*jDim*kDim;
 
-    int iChunk = 10;
+    int iChunk = 2;
     int jChunk = 4;
     int kChunk = 1;
 
     int chSize = iChunk*jChunk*kChunk;
     int noOfChunks = coreSize/chSize;
 
-    int iHalChunk = 12;
+    int iHalChunk = 4;
     int jHalChunk = 6;
-    int kHalChunk = 1;
+    int kHalChunk = 3;
 
     int chHSize = iHalChunk*jHalChunk*kHalChunk;
+    int noOfChunksInJ = (iDim*jDim) / (iChunk*jChunk);
 
     float * inputArray = p;
     int timeIterations = 1;
@@ -59,6 +60,7 @@ void fillAndChunk(float *p, float *outputAray) {
                             }
 
 
+                            // TODO: done for 1-point halo: should be more general
                             if (kDim == 1 && jDim == 1) {
                                 int inputStartOffset = i_start - 1;
                                 int inputEndOffset = i_start + 1 + iChunk;
@@ -77,23 +79,42 @@ void fillAndChunk(float *p, float *outputAray) {
                                 int inputEndOffset = offset + iChunk + 2;
 
                                 if (i_start == 0) {
-                                    chunkIdx += 1;
+                                    chunkIdx += 1; // halo of zero
                                     offset = (j-1)*iChunk*noOfChunks;
                                     inputEndOffset = offset + iChunk + 1;
                                 }
                                 
                                 if (i_start + iChunk >= iDim) {
-                                    chunkIdx = chunkIdx - 1;
                                     inputEndOffset -= 1;
                                 }
 
                                 std::copy(inputArray + offset, inputArray + inputEndOffset, ch1 + chunkIdx);   
+                            } else {
+                                int offset = i_start + (j-1)*iChunk*noOfChunksInJ + k*iDim*jDim + (k_start-1)*iDim*jDim - 1;
+                                int chunkIdx = j*iHalChunk + k*iHalChunk*jHalChunk;
+
+                                if (i_start == 0) {
+                                   chunkIdx += 1; 
+                                   offset = (j-1)*iChunk*noOfChunksInJ + k*iDim*jDim + (k_start-1)*iDim*jDim;
+                                }
+
+                                if (k_start == 0) {
+                                    offset = i_start + (j-1)*iChunk*noOfChunksInJ + (k-1)*iDim*jDim - 1;
+                                }
+
+                                if (k_start == 0 && i_start == 0) {
+                                    offset = (j-1)*iChunk*noOfChunksInJ + (k-1)*iDim*jDim;
+                                }
+
+                                int inputEndOffset = offset + iChunk + 1;
+                                std::copy(inputArray + offset, inputArray + inputEndOffset, ch1 + chunkIdx);                          
                             }
                         }
                     }
                     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
                     std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
                     std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
+                    
                     
                     std::cout << "\nCore\n" << "";
                     std::cout << "i_start " << i_start << "\n";
@@ -103,6 +124,7 @@ void fillAndChunk(float *p, float *outputAray) {
                     std::cout << "\n\n" << "";
                     
                     std::cout << "\nchunk\n";
+                    
                     //computePeriodic(ch1);
                     simpleCompute(ch1, ch2);
                     // Again, for testing purposes. Remove once integrated to the api.
@@ -149,9 +171,9 @@ inline unsigned int F2D2C(
 }
 
 void simpleCompute(float * ch1, float * ch2) {
-    int iHalChunk = 12;
+    int iHalChunk = 4;
     int jHalChunk = 6;
-    int kHalChunk = 1;
+    int kHalChunk = 3;
 
     for (int k = 0; k < kHalChunk; k++) {
         for (int j = 1; j < jHalChunk-1; j++) {
@@ -221,21 +243,21 @@ void computeCore(float * ch1, float * ch2) {
 
 
 int main(void) {
-    int iDim = 40;
+    int iDim = 4;
     int jDim = 4;
-    int kDim = 1;
+    int kDim = 3;
 
     int inputArraySize = iDim*jDim*kDim;
 
-    int iChunk = 10;
+    int iChunk = 2;
     int jChunk = 4;
     int kChunk = 1;
 
     int arraySize = iChunk*jChunk*kChunk;
 
-    int iHalChunk = 12;
+    int iHalChunk = 4;
     int jHalChunk = 6;
-    int kHalChunk = 1;
+    int kHalChunk = 3;
 
     float *outputArray = (float*)malloc(sizeof(float)*inputArraySize);
     std::fill(outputArray, outputArray+(inputArraySize), 0.0);
