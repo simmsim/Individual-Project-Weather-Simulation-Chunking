@@ -8,6 +8,7 @@
 void computePeriodic(float * ch1);
 void computeCore(float * ch1, float * ch2);
 void simpleCompute1D(SimulationRange haloRange, float * ch1, float * ch2);
+void simpleCompute2D(SimulationRange haloRange, float * ch1, float * ch2);
 
 void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                   SimulationRange haloRange, float *p, float *outputAray) {
@@ -21,8 +22,13 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
     int jChunk = chunkRange.getDimSizes()[1];
     int kChunk = chunkRange.getDimSizes()[2];
 
+    int currentIChunk = iChunk;
+
     int chSize = iChunk*jChunk*kChunk;
     int noOfChunks = coreSize/chSize;
+
+    int noOfLeftoverChunks = coreSize % chSize == 0? 0 : 1;
+    int leftoverIChunk = noOfLeftoverChunks == 1 ? (coreSize - noOfChunks*chSize)/jChunk : 0;
 
     int iHalChunk = haloRange.getDimSizes()[0];
     int jHalChunk = haloRange.getDimSizes()[1];
@@ -42,8 +48,22 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                     if (i_start + iChunk > iDim) {
                         // leftover chunk
                         int leftoverSize = coreSize % chSize;
-                        iChunk = leftoverSize;
+                        //iChunk = leftoverSize; // TODO fix for 1D
+                        if (jDim > 1 && kDim == 1) {
+                            currentIChunk = (coreSize % chSize) / jChunk;
+                            iHalChunk = currentIChunk + 2;
+                            haloRange.getDimSizes()[0] = iHalChunk;
+                            chHSize =  iHalChunk*jHalChunk*kHalChunk;
+                            /*
+                            iChunk = iChunk / jChunk;
+                            iHalChunk = iChunk + 2;
+                            haloRange.getDimSizes()[0] = iHalChunk;
+                            chSize = iChunk*jChunk*kChunk;
+                            noOfChunks = (coreSize + chSize - 1) / chSize;
+                            */
+                        }
                     }
+
                     // input chunk
                     float *ch1 = (float*)malloc(sizeof(float)*chHSize);
                     std::fill(ch1, ch1+(chHSize), 0.0);
@@ -81,13 +101,15 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                                 std::copy(inputArray + inputStartOffset, inputArray + inputEndOffset, ch1 + chunkOffset);
                             }  else if (kDim == 1) {
                                 int chunkIdx = j*iHalChunk;
-                                int offset = (j-1)*iChunk*noOfChunks + i_start - 1;
-                                int inputEndOffset = offset + iChunk + 2;
+                                int offset = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk + i_start - 1; // the iChunk must
+                                // the full chunks'
+                                int inputEndOffset = offset + currentIChunk + 2; // HERE iCHUNK will vary
 
                                 if (i_start == 0) {
                                     chunkIdx += 1; // halo of zero
-                                    offset = (j-1)*iChunk*noOfChunks;
-                                    inputEndOffset = offset + iChunk + 1;
+                                    offset = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk; 
+                                    inputEndOffset = offset + iChunk + 1; // this iChunk value will always be of full chunks'
+                                    // here since i_start == 0 is always full
                                 }
                                 
                                 if (i_start + iChunk >= iDim) {
@@ -121,26 +143,31 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                     std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
                     std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
                     
-                    /*
+                    
                     std::cout << "\nCore\n" << "";
-                    //std::cout << "i_start " << i_start << "\n";
+                    std::cout << "i_start " << i_start << "\n";
                     for (int idx = 0; idx < chHSize; idx++) {
                         std::cout << ch1[idx] << " ";
                     }
                     std::cout << "\n\n" << "";
-                    */
                     
-                    //computePeriodic(ch1);
-                    simpleCompute1D(haloRange, ch1, ch2);
+                    
+                    // For testing purposes.
+                    if (jDim == 1 && kDim == 1) {
+                        simpleCompute1D(haloRange, ch1, ch2);
+                    } else if (kDim == 1) {
+                        simpleCompute2D(haloRange, ch1, ch2);
+                    } else {
+                        //computePeriodic(ch1);
+                    }
+                    
                     // Again, for testing purposes. Remove once integrated to the api.
-                    /*
+                    
                     std::cout << "\n After SIMPLE compute\n" << "";
                     for (int idx = 0; idx < chHSize; idx++) {
                         std::cout << ch2[idx] << " ";
                     }
                     std::cout << "\n\n" << "";
-                    std::cout << "\nAfter compute\n";
-                    */
 
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
@@ -149,8 +176,9 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                     } else if (kDim == 1) {
                         for (int j = 1; j < jHalChunk - 1; j++) {
                             int chunkIdx = j*iHalChunk + 1;
-                            int arrayEnd = (j-1)*iChunk*noOfChunks + i_start;
-                            std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
+                            //int arrayEnd = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk + i_start;
+                            int arrayEnd = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk + i_start;
+                            std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, outputAray+arrayEnd);
                         }
                     } else {
                         for (int k = 1; k < kHalChunk - 1; k++) { 
@@ -194,5 +222,23 @@ void simpleCompute1D(SimulationRange haloRange, float * ch1, float * ch2) {
 
     for (int i = 1; i < iHalChunk-1; i++) {
         ch2[i] = ch1[i-1] + ch1[i] + ch1[i+1];
+    }
+}
+
+void simpleCompute2D(SimulationRange haloRange, float * ch1, float * ch2) {
+    int iHalChunk = haloRange.getDimSizes()[0];
+    int jHalChunk = haloRange.getDimSizes()[1];
+    int kHalChunk = haloRange.getDimSizes()[2];
+
+    for (int k = 0; k < kHalChunk; k++) {
+        for (int j = 1; j < jHalChunk-1; j++) {
+            for (int i = 1; i < iHalChunk-1; i++) {
+                ch2[F2D2C(iHalChunk, 0, 0, i, j)] = ch1[F2D2C(iHalChunk, 0, 0, i, j)]
+                                                + ch1[F2D2C(iHalChunk, 0, 0, i-1, j)]
+                                                + ch1[F2D2C(iHalChunk, 0, 0, i+1, j)]
+                                                + ch1[F2D2C(iHalChunk, 0, 0, i, j-1)]
+                                                + ch1[F2D2C(iHalChunk, 0, 0, i, j+1)];
+            }
+        }
     }
 }
