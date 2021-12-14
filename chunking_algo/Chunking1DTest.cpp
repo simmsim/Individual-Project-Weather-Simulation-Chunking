@@ -3,38 +3,38 @@
 #include <iostream>
 #include <string>
 
-void chunk1DUsingChunkSize2() {
+void process1DWithEqualChunksNoLeftover() {
     SimulationRange coreRange = SimulationRange(10);
     SimulationRange chunkRange = SimulationRange(2);
     SimulationRange haloRange = SimulationRange(4);
 
     float expected[10] = {3, 6, 9, 12, 15, 18, 21, 24, 27, 19};
 
-    chunk(coreRange, chunkRange, haloRange, expected, "chunk1DUsingChunkSize2");
+    chunk(coreRange, chunkRange, haloRange, expected, "process1DWithEqualChunksNoLeftover");
 }
 
-void chunk1DWithLeftoverChunkSize() {
+void process1DWithLeftoverChunk() {
     SimulationRange coreRange = SimulationRange(10);
     SimulationRange chunkRange = SimulationRange(4);
     SimulationRange haloRange = SimulationRange(6);
 
     float expected[10] = {3, 6, 9, 12, 15, 18, 21, 24, 27, 19};
 
-    chunk(coreRange, chunkRange, haloRange, expected, "chunk1DWithLeftoverChunkSize");
+    chunk(coreRange, chunkRange, haloRange, expected, "process1DWithLeftoverChunk");
 }
 
-void process1DInFullWithoutChunking() {
+void process1DProblemThatFitsInSingleChunk() {
     SimulationRange coreRange = SimulationRange(10);
     SimulationRange chunkRange = SimulationRange(10);
     SimulationRange haloRange = SimulationRange(12);
 
     float expected[10] = {3, 6, 9, 12, 15, 18, 21, 24, 27, 19};
 
-    chunk(coreRange, chunkRange, haloRange, expected, "process1DInFullWithoutChunking");
+    chunk(coreRange, chunkRange, haloRange, expected, "process1DProblemThatFitsInSingleChunk");
 }
 
 int main(void) {
-    chunk1DUsingChunkSize2();
-    chunk1DWithLeftoverChunkSize();
-    process1DInFullWithoutChunking();
+    process1DWithEqualChunksNoLeftover();
+    process1DProblemThatFitsInSingleChunk();
+    process1DWithLeftoverChunk();
 }

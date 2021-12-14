@@ -40,6 +40,7 @@ void chunk(SimulationRange coreRange, SimulationRange chunkRange,
         std::cout << "Test FAILED for " << testName << std::endl;
     }
 
-    free(outputArray);
+    std::cout << "hello\n";
     free(inputArray);
+    free(outputArray);
 }
