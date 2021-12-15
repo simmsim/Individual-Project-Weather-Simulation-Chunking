@@ -1,5 +1,5 @@
 #include "../SimulationRange.h"
-#include "fillAndChunk1D.h"
+#include "fillAndChunk.h"
 
 #include <iostream>
 #include <string>
@@ -40,7 +40,6 @@ void chunk(SimulationRange coreRange, SimulationRange chunkRange,
         std::cout << "Test FAILED for " << testName << std::endl;
     }
 
-    std::cout << "hello\n";
     free(inputArray);
     free(outputArray);
 }
