@@ -14,14 +14,11 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
     int jDim = coreRange.getDimSizes()[1];
     int kDim = coreRange.getDimSizes()[2];
 
-    int coreSize = iDim*jDim*kDim;
-
     int iChunk = chunkRange.getDimSizes()[0];
     int jChunk = chunkRange.getDimSizes()[1];
     int kChunk = chunkRange.getDimSizes()[2];
 
     int currentIChunk = iChunk;
-
     int chSize = iChunk*jChunk*kChunk;
 
     int coreSizeij = iDim*jDim;

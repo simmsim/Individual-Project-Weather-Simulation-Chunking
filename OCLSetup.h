@@ -1,9 +1,10 @@
 #include <CL/opencl.hpp>
 #include <string>
 
+#include "ErrorHelper.h"
+
 #define CPU 0
 #define GPU 1
-#define CL_HPP_TARGET_OPENCL_VERSION 200
 
 class OCLSetup {
     public:
@@ -14,7 +15,7 @@ class OCLSetup {
         cl::CommandQueue commandQueue;
 
         struct deviceProperties {
-            int deviceType; 
+            cl_device_type deviceType; 
             std::string deviceName;
             long maxMemAllocSize;
             // TODO: Later, add any properties needed

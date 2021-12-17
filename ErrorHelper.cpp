@@ -1,15 +1,12 @@
-#include <CL/opencl.hpp>
-#include <stdlib.h>
-#include <string>
+#include "ErrorHelper.h"
 
-const char* getErrorCodeDescription(cl_int errorCode);
 
-void printError(cl_int errorCode, const char* description) {
+void ErrorHelper::printError(cl_int errorCode, const char* description) {
     printf("Error: %s. Error code %d: %s", description, 
         errorCode, getErrorCodeDescription(errorCode));
 }
 
-void testError(cl_int errorCode, std::string description) 
+void ErrorHelper::testError(cl_int errorCode, std::string description) 
 {
     if (errorCode != CL_SUCCESS) 
     {
@@ -18,7 +15,7 @@ void testError(cl_int errorCode, std::string description)
     }
 }
 
-const char* getErrorCodeDescription(cl_int errorCode)
+const char* ErrorHelper::getErrorCodeDescription(cl_int errorCode)
 {
     switch (errorCode) {
         case 0: return "CL_SUCCESS";

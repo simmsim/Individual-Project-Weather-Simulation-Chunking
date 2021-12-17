@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 
-int main(void) {
+void checkOpenCLIsWorking() {
     cl_int errorCode;
     int deviceType = CPU;
     char * programFileName = (char*) "simpleKernel.cl";
@@ -39,4 +39,8 @@ int main(void) {
 
     free(inputArray);
     free(outputArray);
+}
+
+int main(void) {
+    checkOpenCLIsWorking();
 }

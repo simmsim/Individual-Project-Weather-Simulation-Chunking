@@ -1,10 +1,10 @@
 #define CL_HPP_ENABLE_PROGRAM_CONSTRUCTION_FROM_ARRAY_COMPATIBILITY
 
 #include "OCLSetup.h"
-#include "errorHelper.h"
 
 #include <iostream>
 #include <fstream>
+
 
 OCLSetup::OCLSetup(int deviceType, char * programFileName,
                     char * kernelName) {
@@ -21,17 +21,17 @@ void OCLSetup::CreateContext(int deviceType_) {
 
     errorCode = cl::Platform::get(&platforms);
     if (errorCode != CL_SUCCESS || platforms.size() == 0) {
-        printError(errorCode, "Failed to find any platforms");
+        ErrorHelper::printError(errorCode, "Failed to find any platforms");
         exit(EXIT_FAILURE);
     }
 
-    cl_device_type deviceType = deviceType_ == CPU ? CL_DEVICE_TYPE_CPU : CL_DEVICE_TYPE_GPU;
-    platforms[0].getDevices(deviceType, &platformDevices);
+    deviceProperties.deviceType = deviceType_ == CPU ? CL_DEVICE_TYPE_CPU : CL_DEVICE_TYPE_GPU;
+    platforms[0].getDevices(deviceProperties.deviceType, &platformDevices);
     if (platformDevices.size() == 0) {
         // deviceType is only a number. TODO: nitpick, provide with device type name
-        std::cout << "No devices found for the type: " << deviceType << ". Will use any other available device\n";
+        std::cout << "No devices found for the type: " << deviceProperties.deviceType << ". Will use any other available device\n";
         platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &platformDevices);
-        testError(platformDevices.size() > 0 ? CL_SUCCESS : -1, "Failed to find any devices on platform");
+        ErrorHelper::testError(platformDevices.size() > 0 ? CL_SUCCESS : -1, "Failed to find any devices on platform");
     }
 
     device = platformDevices[0];
@@ -46,7 +46,7 @@ void OCLSetup::SetDeviceProperties() {
 void OCLSetup::CreateCommandQueue() {
     cl_int errorCode;
     commandQueue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &errorCode);
-    testError(errorCode, "Failed to create command queue for the device");
+    ErrorHelper::testError(errorCode, "Failed to create command queue for the device");
 }
 
 void OCLSetup::CreateKernelFromProgram(char * programFileName, 
@@ -54,7 +54,7 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
     cl_int errorCode;                                       
 
     std::ifstream file(programFileName);
-    testError(file.is_open() ? CL_SUCCESS : -1,
+    ErrorHelper::testError(file.is_open() ? CL_SUCCESS : -1,
                 "Failed to read a file that was open");
 
     std::string prog(
@@ -64,10 +64,10 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
 
     cl::Program::Sources source(1, std::make_pair(prog.c_str(), prog.length()+1));
     cl::Program kernelProgram(context, source, &errorCode); 
-    testError(errorCode, "Failed to create the program");
+    ErrorHelper::testError(errorCode, "Failed to create the program");
     errorCode = kernelProgram.build(device);
-    testError(errorCode, "Failed to build the program");
+    ErrorHelper::testError(errorCode, "Failed to build the program");
     program = kernelProgram;
     kernel = cl::Kernel(program, kernelName, &errorCode);
-    testError(errorCode, "Failed to create the kernel");
+    ErrorHelper::testError(errorCode, "Failed to create the kernel");
 }
