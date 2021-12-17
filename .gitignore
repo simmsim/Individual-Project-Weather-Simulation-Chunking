@@ -5,3 +5,6 @@ oclTest
 Chunking3DTest
 Chunking2DTest
 Chunking1DTest
+
+OCLSetupTest
+ChunkingSimulationTest
