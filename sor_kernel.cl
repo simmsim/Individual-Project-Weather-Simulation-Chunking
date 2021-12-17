@@ -4,7 +4,7 @@
 #define TOPBOTTOM 4
 #define CORE 5
 
-unsigned int F3D2C(unsigned int i_rng,unsigned int j_rng, // ranges, i.e. (hb-lb)+1
+inline unsigned int F3D2C(unsigned int i_rng,unsigned int j_rng, // ranges, i.e. (hb-lb)+1
         int i_lb, int j_lb, int k_lb, // lower bounds
         int ix, int jx, int kx) 
 {
@@ -21,26 +21,29 @@ Compute the periodic condition, i.e. initialize side halos
 p_in(0, i, 0, k) = p_in(0, i, jp, k)
 p_in(0, i, jp+1, k) = p_in(0, i, 1, k)
 */
-void compute_periodic_condition(__global float *p, const int ip, 
+void compute_periodic_condition(__global float *p_in, const int ip, 
                                 const int jp) 
 {
-    int i = get_global_id(0);
-    int k = get_global_id(2);
-    /*
-    int i_range = iChunk + 2;
-    int j_range = jChunk + 2;
-    int k_range = kChunk + 2;
+    int global_id = get_global_id(0);
+
+    int i_range = ip + 2;
+    int j_range = jp + 2;
     
     int k = global_id/(i_range*j_range);
     int i = global_id-(k*i_range);
-
-    p[FTNREF3D0(i, 0, k, ip+2, jp+2)] = p[FTNREF3D0(i, jp, k, ip+2, jp+2)];
-    p[FTNREF3D0(i, jp+1, k, ip+2, jp+2)] = p[FTNREF3D0(i, 1, k, ip+2, jp+2)];
+    
+    //p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[i_range*j_range*k+i_range*jp+i]; -- when i use this, it's fine
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)]; // -- this makes it fail
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
+    
+    /*
+    this worked
+    int i = get_global_id(0);
+    int k = get_global_id(2);
+    
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)];
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
     */
-    p[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)];
-    p[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
-
-    //printf("p left: %d, ", p[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)]);
 }
 
 /*

@@ -24,6 +24,7 @@ void Simulation::InitializeSimulationArea(cl_float * p, int halo, int iterations
     simulationArea.chunkDimensions = (chunkDimensions.getDimensions() == 0) ? SimulationRange(coreDimensions) : chunkDimensions;
     simulationArea.halChunkDimensions = SimulationRange(chunkDimensions);
     simulationArea.halChunkDimensions.incrementDimensionsBy(halo*2);
+    
 }
 
 void Simulation::CheckSpecifiedChunkSize() {
@@ -222,7 +223,7 @@ void Simulation::ChunkAndCompute() {
                     oclSetup.kernel.setArg(5, 1);
 
                     cl::Event event;
-                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, jHalChunk, kHalChunk),
+                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(sizeOfHChunk),
                         cl::NullRange, nullptr, &event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
 

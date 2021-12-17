@@ -65,7 +65,9 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
     cl::Program::Sources source(1, std::make_pair(prog.c_str(), prog.length()+1));
     cl::Program kernelProgram(context, source, &errorCode); 
     ErrorHelper::testError(errorCode, "Failed to create the program");
+    std::cout << "Before build\n";
     errorCode = kernelProgram.build(device);
+    std::cout << "After build\n";
     ErrorHelper::testError(errorCode, "Failed to build the program");
     program = kernelProgram;
     kernel = cl::Kernel(program, kernelName, &errorCode);
