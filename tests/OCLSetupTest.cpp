@@ -8,7 +8,7 @@ void checkOpenCLIsWorking() {
     cl_int errorCode;
     int deviceType = CPU;
     char * programFileName = (char*) "simpleKernel.cl";
-    char * kernelName = (char*) "simple_kernel";
+    char * kernelName = (char*) "superkernel";
 
     OCLSetup oclSetup = OCLSetup(deviceType, programFileName, kernelName);
 
@@ -23,6 +23,8 @@ void checkOpenCLIsWorking() {
 
     cl::Buffer buf(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, inputArraySize * sizeof(float), inputArray);
     oclSetup.kernel.setArg(0, buf);
+    oclSetup.kernel.setArg(1, 2);
+    oclSetup.kernel.setArg(2, 6);
 
     cl::Event event;
     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(inputArraySize),
