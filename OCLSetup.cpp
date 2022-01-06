@@ -55,7 +55,7 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
 
     std::ifstream file(programFileName);
     ErrorHelper::testError(file.is_open() ? CL_SUCCESS : -1,
-                "Failed to read a file that was open");
+                "Failed to open file for reading");
 
     std::string prog(
             std::istreambuf_iterator<char>(file),
