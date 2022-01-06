@@ -1,4 +1,5 @@
 #include "../OCLSetup.h"
+#include "../chunking_algo/chunking_test_helpers.h"
 
 #include <CL/opencl.hpp>
 #include <iostream>
@@ -8,7 +9,8 @@ void checkOpenCLIsWorking() {
     cl_int errorCode;
     int deviceType = CPU;
     char * programFileName = (char*) "simpleKernel.cl";
-    char * kernelName = (char*) "superkernel";
+    char * kernelName = (char*) "simple_kernel";
+    float expected[10] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
     OCLSetup oclSetup = OCLSetup(deviceType, programFileName, kernelName);
 
@@ -33,11 +35,13 @@ void checkOpenCLIsWorking() {
     event.wait();
 
     errorCode = oclSetup.commandQueue.enqueueReadBuffer(buf, CL_TRUE, 0, inputArraySize * sizeof(float), outputArray);
-
-    for (int i = 0; i < inputArraySize; i++) {
-        std::cout << outputArray[i] << " ";
+    bool equals = assertEquals(expected, outputArray, inputArraySize);
+    if (equals) {
+        std::cout << "Test SUCCEEDED";
+    } else {
+        std::cout << "Test FAILED";
     }
-    std::cout << "\n";
+    std::cout << " for checking whether OCLSetup is working correctly\n";
 
     free(inputArray);
     free(outputArray);
