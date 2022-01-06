@@ -169,7 +169,7 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
                         int chunkIdx = 1;
-                        std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, outputAray+arrayEnd);
+                        std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, outputAray+arrayEnd);
                     } else if (kDim == 1) {
                         for (int j = 1; j < jHalChunk - 1; j++) {
                             int chunkIdx = j*iHalChunk + 1;
