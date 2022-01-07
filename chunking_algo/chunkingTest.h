@@ -1,22 +1,8 @@
 #include "../SimulationRange.h"
+#include "../test_helpers/assertions.h"
 #include "fillAndChunk.h"
 
-#include <iostream>
 #include <string>
-
-bool assertEquals(float * expected, float * actual, int coreSize) {
-    bool equals = true;
-    for (int i = 0; i < coreSize; i++) {
-        if (expected[i] != actual[i]) {
-            equals = false;
-            std::cout << "Values were different at index " << i << ": expected {"
-            << expected[i] << "} but actual was {" << actual[i] << "}\n";
-            break;
-        }
-    }
-
-    return equals;
-}
 
 void chunk(SimulationRange coreRange, SimulationRange chunkRange,
              SimulationRange haloRange, float * expected,
@@ -33,12 +19,7 @@ void chunk(SimulationRange coreRange, SimulationRange chunkRange,
 
     fillAndChunk(coreRange, chunkRange, haloRange, inputArray, outputArray);
 
-    bool equals = assertEquals(expected, outputArray, coreSize);
-    if (equals) {
-        std::cout << "Test SUCCEEDED for " << testName << std::endl;
-    } else {
-        std::cout << "Test FAILED for " << testName << std::endl;
-    }
+    assertEquals(expected, outputArray, coreSize, testName);
 
     free(inputArray);
     free(outputArray);
