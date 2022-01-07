@@ -4,9 +4,9 @@
 #define TOPBOTTOM 4
 #define CORE 5
 
-inline unsigned int F3D2C(unsigned int i_rng,unsigned int j_rng, // ranges, i.e. (hb-lb)+1
+inline unsigned int F3D2C(int i_rng, int j_rng, // ranges, i.e. (hb-lb)+1
         int i_lb, int j_lb, int k_lb, // lower bounds
-        int ix, int jx, int kx) 
+        int ix, const int jx, int kx) 
 {
     return (i_rng*j_rng*(kx-k_lb)+i_rng*(jx-j_lb)+ix-i_lb);
 }
@@ -23,27 +23,29 @@ p_in(0, i, jp+1, k) = p_in(0, i, 1, k)
 */
 void compute_periodic_condition(__global float *p_in, const int ip, 
                                 const int jp) 
-{
+{    
+    /*
     int global_id = get_global_id(0);
 
     int i_range = ip + 2;
     int j_range = jp + 2;
     
-    int k = global_id/(i_range*j_range);
-    int i = global_id-(k*i_range);
+    int k_rel = global_id/i_range;
+    int k = k_rel;
+    int i_rel = global_id-(k_rel*i_range);
+    int i = i_rel;
     
-    //p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[i_range*j_range*k+i_range*jp+i]; -- when i use this, it's fine
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)]; // -- this makes it fail
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
-    
-    /*
-    this worked
-    int i = get_global_id(0);
-    int k = get_global_id(2);
-    
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)];
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,4,k)]; // -- this fails when RHS, jp is passed; succeeds when actual 
+    //-- value is put in, like 4 in this case. Only fails when 
     p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
     */
+    
+    // This works fine.
+    int i = get_global_id(0);
+    int k = get_global_id(2);
+     
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)];
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
 }
 
 /*
@@ -53,6 +55,21 @@ p_in(0, ip+1, j, k) = p_in(0, ip, j, k)
 void compute_outflow_condition(__global float *p_in, const int ip, 
                               const int jp) 
 {
+    /*
+    int global_id = get_global_id(0);
+
+    int j_range = jp + 2;
+    int i_range = ip + 2;
+
+    int k = global_id/j_range;
+    int j = global_id-(k*j_range);
+
+    int n_ip = ip;
+
+   p_in[F3D2C(ip+2, jp+2, 0,0,0, ip+1,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, 2,j,k)]; // -- fails if ip variable is passed in on the RHS; 
+   // -- works fine if an actual value is passed in, like 2 in this case.
+   */
+
     int j = get_global_id(1);
     int k = get_global_id(2);
 
@@ -66,6 +83,19 @@ p_in(0, 0, j, k) = p_in(0, 1, j, k)
 void compute_inflow_condition(__global float *p_in, const int ip, 
                                const int jp) 
 {
+    /*
+    int global_id = get_global_id(0);
+
+    int j_range = jp + 2;
+    int i_range = ip + 2;
+
+    int k = global_id/j_range;
+    int j = global_id-(k*j_range);
+
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, 0,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, 1,j,k)]; // This actually works, but in order to stay consistent
+    // with how other methods are written, I'll keep this in the comments for now.
+   */
+   
     int j = get_global_id(1);
     int k = get_global_id(2);
 
@@ -80,11 +110,24 @@ p_in(0, i, j, kp+1) = p_in(0, i, j, kp)
 void compute_top_bottom_conditions(__global float *p_in, const int ip, 
                                const int jp, const int kp)  
 {
+    /*
+    int global_id = get_global_id(0);
+
+    int j_range = jp + 2;
+    int i_range = ip + 2;
+    int k_range = kp + 2;
+
+    int j = global_id/i_range;
+    int i = global_id-(j*i_range);
+    // This actually works, but in order to stay consistent
+    // with how other methods are written, I'll keep this in the comments for now.
+    */
+
     int i = get_global_id(0);
     int j = get_global_id(1);
 
     p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,0)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,1)];
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, 0,j,kp+1)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, 1,j,kp)];
+    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,kp+1)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,kp)];
 }
 
 /*
