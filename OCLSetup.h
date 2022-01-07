@@ -1,6 +1,8 @@
 #include <CL/opencl.hpp>
 #include <string>
 
+#define CL_HPP_TARGET_OPENCL_VERSION 200
+
 #include "ErrorHelper.h"
 
 #define CPU 0

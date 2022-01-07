@@ -2,6 +2,8 @@
 #include "SimulationRange.h"
 //#include "errorHelper.h"
 
+#define CL_HPP_TARGET_OPENCL_VERSION 200
+
 #include <CL/opencl.hpp>
 
 class Simulation {

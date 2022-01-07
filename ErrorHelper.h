@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string>
 
+#define CL_HPP_TARGET_OPENCL_VERSION 200
+
 class ErrorHelper {
     public:
         static void printError(cl_int errorCode, const char* description);
