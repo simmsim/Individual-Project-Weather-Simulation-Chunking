@@ -98,7 +98,9 @@ void Simulation::ChunkAndCompute() {
     int chHSize = iHalChunk*jHalChunk*kHalChunk;
     int noOfChunksInJ = (iDim*jDim) / (iChunk*jChunk);
 
-    float * p1 = simulationArea.p;
+    //float * p1 = simulationArea.p;
+    float * p1 = (float*)malloc(sizeof(float)*coreSize);
+    std::copy(simulationArea.p, simulationArea.p + coreSize, p1);
     int chunkIdx = 0;
 
     for (int n = 0; n < simulationArea.iterations; n++) {
@@ -205,6 +207,7 @@ void Simulation::ChunkAndCompute() {
                     std::cout << "\n\n" << "";
 
                     // ****** openCL bit
+                    // TODO: maybe move this bit into a separate method?
                     size_t sizeOfHChunk = simulationArea.halChunkDimensions.getSimulationSize();
                     cl_int errorCode;
 
@@ -219,14 +222,40 @@ void Simulation::ChunkAndCompute() {
                     oclSetup.kernel.setArg(2, currentIChunk);
                     oclSetup.kernel.setArg(3, jChunk);
                     oclSetup.kernel.setArg(4, kChunk);
-                    // PERIODIC
-                    oclSetup.kernel.setArg(5, 1);
 
                     cl::Event event;
-                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(sizeOfHChunk),
+                    if (i_start == 0) {
+                        std::cout << "inflow\n";
+                        oclSetup.kernel.setArg(5, 2);
+                        errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
+                        cl::NullRange, nullptr);
+                        ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                        // in-flow
+                    } else if (i_start + iChunk >= iDim) {
+                        // out-flow
+                        std::cout << "outflow\n";
+                        // TODO: this whole thing could be factored out into a separate method
+                        oclSetup.kernel.setArg(5, 3);
+                        errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
+                        cl::NullRange, nullptr);
+                        ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                    } 
+
+                    // top-bottom, only applies for 3D
+                    if (kDim > 1) {
+                        std::cout << "top-bottom\n";
+                        oclSetup.kernel.setArg(5, 4);
+                        errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, jHalChunk, 1),
+                        cl::NullRange, nullptr);
+                        ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                    }
+
+                    // PERIODIC
+                    oclSetup.kernel.setArg(5, 1);
+                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, 1, kHalChunk),
                         cl::NullRange, nullptr, &event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
-
+                    
                     event.wait();
 
                     errorCode = oclSetup.commandQueue.enqueueReadBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch2);
@@ -238,18 +267,10 @@ void Simulation::ChunkAndCompute() {
                     }
                     std::cout << "\n\n" << "";
 
-                    /*
-                   if (i_start == 0) {
-                       // in-flow
-                   } else if (i_start + iChunk >= iDim) {
-                       // out-flow
-                   } 
-                   */
-
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
                         int chunkIdx = 1;
-                        std::copy(ch2 + chunkIdx, ch2 + chunkIdx + iChunk, p2+arrayEnd);
+                        std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, p2+arrayEnd);
                     } else if (kDim == 1) {
                         for (int j = 1; j < jHalChunk - 1; j++) {
                             int chunkIdx = j*iHalChunk + 1;
@@ -274,8 +295,9 @@ void Simulation::ChunkAndCompute() {
         }
         
         // the output array becomes our problem/input array for next iteration
+        float * intermediate = p1;
         p1 = p2;
-        p2 = simulationArea.p;
+        p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
     for (int i = 0; i < coreSize; i++) {
