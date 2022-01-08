@@ -13,22 +13,26 @@ char * kernelName = (char*) "sor_superkernel";
 void processingHaltsIfChunkDimsExceedCoreDims() {
     // ARRANGE
     SimulationRange coreRange = SimulationRange(4, 4, 2);
-    SimulationRange chunkRange = SimulationRange(2, 4, 2);
+    SimulationRange chunkRange = SimulationRange(2, 6, 2);
     Simulation simulation = Simulation(deviceType, programFileName, kernelName);
     int pSize = coreRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
-    // initialize array with simple values
-    for (int idx = 0; idx < pSize; idx++) {
-        p[idx] = idx + 1;
-    }
+    int expectedDimensionValue = 4;
 
     // ACT
     simulation.RunSimulation(p, halo, iterations, coreRange, chunkRange);
 
     // ASSERT
-
+    SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
+    int actualDimensionValue = newChunkRange.getDimSizes()[1];
+    assertEquals(expectedDimensionValue, actualDimensionValue, "processingHaltsIfChunkDimsExceedCoreDims");
+    // TODO: test fails because the following actually needs to happen in this order
+    // 1. check if halloed chunk exceeds available memory; if no, goto 2. else goto 1.2
+    // 1.2. calculate new chunk values; no need to check if chunk values are appropriate (2)
+    // 2. check if provided chunk values are appropriate; if not, recalculate
 
     // TEARDOWN
+    free(p);
 }
 
 // EXPECTED VALUES WILL HAVE TO BE UPDATED ONCE CORE CALC KERNEL IS DONE
@@ -51,15 +55,13 @@ void testProcessingSimpleCase() {
     simulation.RunSimulation(p, halo, iterations, coreRange, chunkRange);
 
     // ASSERT
-    assertEquals(expected, simulation.simulationArea.p, coreRange.getSimulationSize(), "testProcessingSimpleCase");
+    assertEquals(expected, p, coreRange.getSimulationSize(), "testProcessingSimpleCase");
 
     // TEARDOWN
     free(p);
-    simulation.simulationArea.p = NULL;
 }
 
-
 int main(void) {
-    testProcessingSimpleCase();
-    
+    processingHaltsIfChunkDimsExceedCoreDims();
+    //testProcessingSimpleCase();
 }
