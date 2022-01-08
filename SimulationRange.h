@@ -1,3 +1,5 @@
+#include <iostream>
+
 class SimulationRange {
     private:
         int dimSizes[3];
@@ -51,5 +53,15 @@ class SimulationRange {
                 dimSizes[i] += value;
                 simulationSize *= dimSizes[i];
             }
+        }
+
+        void updateDimSize(int index, int newDimSize) {
+            if (index > 3 || index < 0) {
+                std::cout << "Invalid index value is out of range.\n";
+                return;
+            }
+
+            simulationSize = (simulationSize/dimSizes[index]) * newDimSize;
+            dimSizes[index] = newDimSize;
         }
 }; 
