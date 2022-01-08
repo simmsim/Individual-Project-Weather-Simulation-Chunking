@@ -1,33 +1,30 @@
 #include "OCLSetup.h"
 #include "SimulationRange.h"
-//#include "errorHelper.h"
-
-#define CL_HPP_TARGET_OPENCL_VERSION 200
 
 #include <CL/opencl.hpp>
+
+typedef struct simulationAreaStruct {
+    cl_float *p;
+    int halo;
+    int iterations;
+    SimulationRange coreDimensions;
+    SimulationRange chunkDimensions;
+    SimulationRange halChunkDimensions;
+} simulationAreaStruct;
 
 class Simulation {
     private:
         OCLSetup oclSetup;
+        simulationAreaStruct simulationArea;
 
         void InitializeSimulationArea(cl_float * p, int halo, int iterations, 
                                       SimulationRange coreDimensions, SimulationRange chunkDimensions);
         void CheckSpecifiedChunkSize();
         bool ChunkExceedsCoreDimensions();
-        void ReconfigureChunkSize(long maxMem);
+        void ReconfigureChunkSize(long maxMem, long requiredMem);
         void ChunkAndCompute();
 
-    public:
-        // does this need to be public??
-        struct simulationArea {
-            cl_float *p;
-            int halo;
-            int iterations;
-            SimulationRange coreDimensions;
-            SimulationRange chunkDimensions;
-            SimulationRange halChunkDimensions;
-        } simulationArea;
-
+    public:        
         Simulation(int deviceType, char * programFileName,
                     char * kernelName);
 
@@ -39,4 +36,8 @@ class Simulation {
         void RunSimulation(cl_float * p, int halo, int iterations,
                              SimulationRange coreDimensions,
                              SimulationRange chunkDimensions);
+
+        const simulationAreaStruct & getSimulationArea() const {
+            return simulationArea;
+        }
 };
