@@ -1,6 +1,7 @@
 #include "Simulation.h"
 
 #include <iostream>
+#include <math.h>
 
 Simulation::Simulation(int deviceType, char * programFileName,
                        char * kernelName) {
@@ -12,7 +13,7 @@ void Simulation::RunSimulation(cl_float * p, int halo, int iterations,
                                SimulationRange chunkDimensions = SimulationRange()) {
     InitializeSimulationArea(p, halo, iterations, coreDimensions, chunkDimensions);
     CheckSpecifiedChunkSize();
-    ChunkAndCompute();
+   // ChunkAndCompute();
 }
 
 void Simulation::InitializeSimulationArea(cl_float * p, int halo, int iterations, 
@@ -28,7 +29,7 @@ void Simulation::InitializeSimulationArea(cl_float * p, int halo, int iterations
 }
 
 void Simulation::CheckSpecifiedChunkSize() {
-    long maxMem = oclSetup.deviceProperties.maxMemAllocSize * 0.95;
+    long maxMem = oclSetup.deviceProperties.maxMemAllocSize * 0.95; // TODO: maybe move to initialization?
     long requiredMem = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(float) * 2;
     if (requiredMem > maxMem) {
         std::cout << "Required memory for processing {" << requiredMem 
@@ -38,7 +39,7 @@ void Simulation::CheckSpecifiedChunkSize() {
     } 
 
     std::cout << "New chunk size will be determined automatically.\n";
-    ReconfigureChunkSize(maxMem);
+    ReconfigureChunkSize(maxMem, requiredMem);
 }
 
 bool Simulation::ChunkExceedsCoreDimensions() {
@@ -64,8 +65,18 @@ bool Simulation::ChunkExceedsCoreDimensions() {
     return false;
 }
 
-void Simulation::ReconfigureChunkSize(long maxMem) {
-    // TODO: automatic chunk configuration; low priority
+void Simulation::ReconfigureChunkSize(long maxMem, long requiredMem) {
+    // a simple automatic configuration; need for improvement?
+    int noOfChunks = (int)ceil(requiredMem/maxMem);
+    noOfChunks = noOfChunks == 0 ? 1 : noOfChunks; // needed if required memory much much smaller than maxmem
+    std::cout << "Required memory " << requiredMem << "and max " << maxMem << "\n";
+    std::cout << "No of chunks " << noOfChunks << "\n";
+    // since we're just slicing in i directions, leave k and j as is
+    int newDimSize = (int)ceil(simulationArea.halChunkDimensions.getDimSizes()[0] / noOfChunks);
+    //TODO: maybe some logging to inform user to what value it was updated?
+    std::cout << "New dim size is " << newDimSize << "\n";
+    simulationArea.chunkDimensions.updateDimSize(0, newDimSize);
+    simulationArea.halChunkDimensions.updateDimSize(0, newDimSize+simulationArea.halo);
 }
 
 void Simulation::ChunkAndCompute() {
