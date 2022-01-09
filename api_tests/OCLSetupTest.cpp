@@ -1,5 +1,5 @@
 #include "../OCLSetup.h"
-#include "../chunking_algo/chunking_test_helpers.h"
+#include "../test_helpers/assertions.h"
 
 #include <CL/opencl.hpp>
 #include <iostream>
@@ -35,18 +35,13 @@ void checkOpenCLIsWorking() {
     event.wait();
 
     errorCode = oclSetup.commandQueue.enqueueReadBuffer(buf, CL_TRUE, 0, inputArraySize * sizeof(float), outputArray);
-    bool equals = assertEquals(expected, outputArray, inputArraySize);
-    if (equals) {
-        std::cout << "Test SUCCEEDED";
-    } else {
-        std::cout << "Test FAILED";
-    }
-    std::cout << " for checking whether OCLSetup is working correctly\n";
-
+    assertEquals(expected, outputArray, inputArraySize, "checkOpenCLIsWorking");
+    
     free(inputArray);
     free(outputArray);
 }
 
 int main(void) {
     checkOpenCLIsWorking();
+    return 0;
 }

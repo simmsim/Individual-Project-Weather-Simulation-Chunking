@@ -10,29 +10,45 @@ int iterations = 1;
 char * programFileName = (char*) "../sor_kernel.cl";
 char * kernelName = (char*) "sor_superkernel";
 
-void processingHaltsIfChunkDimsExceedCoreDims() {
-    // ARRANGE
-    SimulationRange coreRange = SimulationRange(4, 4, 2);
-    SimulationRange chunkRange = SimulationRange(2, 6, 2);
+Simulation initializeAndRun(SimulationRange coreRange, SimulationRange chunkRange,
+                         float maxSimulationAreaMemUsage) {
     Simulation simulation = Simulation(deviceType, programFileName, kernelName);
     int pSize = coreRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
-    int expectedDimensionValue = 4;
+    for (int idx = 0; idx < pSize; idx++) {
+        p[idx] = idx + 1;
+    }
+
+    simulation.RunSimulation(p, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);    
+    return simulation;
+}
+
+void testProcessingHaltsIfChunkDimsExceedCoreDims() {
+    // ARRANGE
+    SimulationRange coreRange = SimulationRange(4, 4, 2);
+    SimulationRange chunkRange = SimulationRange(3, 4, 2);
+    float maxSimulationAreaMemUsage = 0.00004;
+
+    // EXPECTATIONS
+    float expectedSimulationArea[32] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 
+                            18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
+    int expectedDimensionValue = 2;
 
     // ACT
-    simulation.RunSimulation(p, halo, iterations, coreRange, chunkRange);
+    Simulation simulation = initializeAndRun(coreRange, chunkRange, maxSimulationAreaMemUsage);
 
     // ASSERT
     SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
-    int actualDimensionValue = newChunkRange.getDimSizes()[1];
-    assertEquals(expectedDimensionValue, actualDimensionValue, "processingHaltsIfChunkDimsExceedCoreDims");
-    // TODO: test fails because the following actually needs to happen in this order
-    // 1. check if halloed chunk exceeds available memory; if no, goto 2. else goto 1.2
-    // 1.2. calculate new chunk values; no need to check if chunk values are appropriate (2)
-    // 2. check if provided chunk values are appropriate; if not, recalculate
+    int actualDimensionValue = newChunkRange.getDimSizes()[0];
+    float * actualSimulationArea = simulation.getSimulationArea().p;
+
+    assertEquals(expectedSimulationArea, actualSimulationArea, coreRange.getSimulationSize(), 
+                "processingHaltsIfChunkDimsExceedCoreDims: simulation area has been computed correctly");
+    assertEquals(expectedDimensionValue, actualDimensionValue, 
+                "processingHaltsIfChunkDimsExceedCoreDims: new chunk dimensions was re-computed correctly.");
 
     // TEARDOWN
-    free(p);
+    free(simulation.getSimulationArea().p);
 }
 
 // EXPECTED VALUES WILL HAVE TO BE UPDATED ONCE CORE CALC KERNEL IS DONE
@@ -40,28 +56,25 @@ void testProcessingSimpleCase() {
     // ARRANGE
     SimulationRange coreRange = SimulationRange(4, 4, 2);
     SimulationRange chunkRange = SimulationRange(2, 4, 2);
-    Simulation simulation = Simulation(deviceType, programFileName, kernelName);
-    int pSize = coreRange.getSimulationSize();
-    float *p = (float*)malloc(sizeof(float)*pSize);
-    // initialize array with simple values
-    for (int idx = 0; idx < pSize; idx++) {
-        p[idx] = idx + 1;
-    }
+    float maxSimulationAreaMemUsage = 95;
 
-    float expected[32] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 
+    float expectedSimulationArea[32] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 
                             18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
 
     // ACT
-    simulation.RunSimulation(p, halo, iterations, coreRange, chunkRange);
+    Simulation simulation = initializeAndRun(coreRange, chunkRange, maxSimulationAreaMemUsage);
 
     // ASSERT
-    assertEquals(expected, p, coreRange.getSimulationSize(), "testProcessingSimpleCase");
+    float * actualSimulationArea = simulation.getSimulationArea().p;
+    assertEquals(expectedSimulationArea, actualSimulationArea, coreRange.getSimulationSize(), "testProcessingSimpleCase");
 
     // TEARDOWN
-    free(p);
+    free(simulation.getSimulationArea().p);
 }
 
 int main(void) {
-    processingHaltsIfChunkDimsExceedCoreDims();
-    //testProcessingSimpleCase();
+    testProcessingHaltsIfChunkDimsExceedCoreDims();
+    testProcessingSimpleCase();
+
+    return 0;
 }
