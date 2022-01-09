@@ -1,23 +1,8 @@
 #include "../SimulationRange.h"
+#include "../test_helpers/assertions.h"
 
-#include <iostream>
 
-#define IS_TRUE(result) {std::cout << "Test for " << __FUNCTION__ << ""; if (!result) std::cout << " failed on line " << __LINE__ << std::endl; else std::cout << " succeeded.\n"; }
-
-bool assertEquals(SimulationRange expected, SimulationRange actual) {
-    bool dimEqual = true;
-    for (int i = 0; i < expected.getDimensions() && i < actual.getDimensions(); i++) {
-        if (expected.getDimSizes()[i] != actual.getDimSizes()[i]) {
-            dimEqual = false;
-        }
-    }
-
-    return (expected.getDimensions() == actual.getDimensions()) &&
-           (expected.getSimulationSize() == actual.getSimulationSize()) &&
-           dimEqual;
-}
-
-void rangeIsCopiedAndIncrementedCorrectly() {
+void testRangeIsCopiedAndIncrementedCorrectly() {
     SimulationRange range = SimulationRange(4, 6, 4);
 
     SimulationRange actualhHalRange = SimulationRange(range);
@@ -25,9 +10,21 @@ void rangeIsCopiedAndIncrementedCorrectly() {
 
     SimulationRange expectedHalRange = SimulationRange(6, 8, 6);
     
-    IS_TRUE(assertEquals(expectedHalRange, actualhHalRange));
+    assertEquals(expectedHalRange, actualhHalRange, "testRangeIsCopiedAndIncrementedCorrectly");
+}
+
+void testRangeDimSizeIsUpdatedAtIndexCorrectly() {
+    SimulationRange range = SimulationRange(10, 5, 5);
+
+    range.updateDimSize(0, 2);
+
+    assertEquals(2, range.getDimSizes()[0], "testRangeDimSizeIsUpdatedAtIndexCorrectly: index updated.");
+    assertEquals(50, range.getSimulationSize(), "testRangeDimSizeIsUpdatedAtIndexCorrectly: simulation size updated.");
 }
 
 int main(void) {
-    rangeIsCopiedAndIncrementedCorrectly();
+    testRangeIsCopiedAndIncrementedCorrectly();
+    testRangeDimSizeIsUpdatedAtIndexCorrectly();
+
+    return 0;
 }
