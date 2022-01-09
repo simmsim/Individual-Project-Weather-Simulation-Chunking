@@ -32,3 +32,18 @@ void assertEquals(int expected, int actual, std::string testName) {
     }
     printTestResultMessage(succeeded, testName);
 }
+
+void assertEquals(SimulationRange expected, SimulationRange actual, 
+                  std::string testName) {
+    bool dimEqual = true;
+    for (int i = 0; i < expected.getDimensions() && i < actual.getDimensions(); i++) {
+        if (expected.getDimSizes()[i] != actual.getDimSizes()[i]) {
+            dimEqual = false;
+        }
+    }
+
+    bool succeeded = (expected.getDimensions() == actual.getDimensions()) &&
+           (expected.getSimulationSize() == actual.getSimulationSize()) &&
+           dimEqual;
+    printTestResultMessage(succeeded, testName);
+}
