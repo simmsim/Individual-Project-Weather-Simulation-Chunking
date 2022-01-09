@@ -8,6 +8,12 @@
 #define CPU 0
 #define GPU 1
 
+typedef struct devicePropertiesStruct {
+    cl_device_type deviceType; 
+    std::string deviceName;
+    long maxMemAllocSize;
+} devicePropertiesStruct;
+
 class OCLSetup {
     public:
         cl::Device device;
@@ -15,16 +21,7 @@ class OCLSetup {
         cl::Program program;
         cl::Kernel kernel;
         cl::CommandQueue commandQueue;
-
-        struct deviceProperties {
-            cl_device_type deviceType; 
-            std::string deviceName;
-            long maxMemAllocSize;
-            // TODO: Later, add any properties needed
-            // to determine optimal chunk size; 
-            // or to check if user's not exceeding available
-            // mem on device
-        } deviceProperties;
+        devicePropertiesStruct deviceProperties;
 
         OCLSetup() = default;
         OCLSetup(int deviceType, char * programFileName,
