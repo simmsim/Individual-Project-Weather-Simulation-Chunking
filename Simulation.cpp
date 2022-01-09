@@ -9,11 +9,13 @@ Simulation::Simulation(int deviceType, char * programFileName,
 }
 
 void Simulation::RunSimulation(cl_float * p, int halo, int iterations,
+                               float maxSimulationAreaMemUsage,
                                SimulationRange coreDimensions, 
                                SimulationRange chunkDimensions = SimulationRange()) {
     InitializeSimulationArea(p, halo, iterations, coreDimensions, chunkDimensions);
-    CheckSpecifiedChunkSize();
-   // ChunkAndCompute();
+    CheckChunkDimensions();
+    CheckSpecifiedChunkSize(maxSimulationAreaMemUsage);
+    ChunkAndCompute();
 }
 
 void Simulation::InitializeSimulationArea(cl_float * p, int halo, int iterations, 
@@ -28,28 +30,26 @@ void Simulation::InitializeSimulationArea(cl_float * p, int halo, int iterations
     
 }
 
-void Simulation::CheckSpecifiedChunkSize() {
-    long maxMem = oclSetup.deviceProperties.maxMemAllocSize * 0.95; // TODO: maybe move to initialization?
+void Simulation::CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage) {
+    long maxMem = (oclSetup.deviceProperties.maxMemAllocSize * maxSimulationAreaMemUsage)/100;
     long requiredMem = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(float) * 2;
     if (requiredMem > maxMem) {
-        std::cout << "Required memory for processing {" << requiredMem 
-            << "} exceeds device's memory max allocation size {" << maxMem << "}\n";
-    } else if (!ChunkExceedsCoreDimensions()) {
-        return;
-    } 
-
-    std::cout << "New chunk size will be determined automatically.\n";
-    ReconfigureChunkSize(maxMem, requiredMem);
+        std::cout << "Required memory for processing a chunk {" << requiredMem 
+            << "} exceeds device's memory max allocation size {" << maxMem << "}. "
+            << "New chunk size will be determined automatically.\n";
+        ReconfigureChunkSize(maxMem);
+    }
 }
 
-bool Simulation::ChunkExceedsCoreDimensions() {
+void Simulation::CheckChunkDimensions() {
     int coreDimensions = simulationArea.coreDimensions.getDimensions();
     int chunkDimensions = simulationArea.chunkDimensions.getDimensions();
 
     if (coreDimensions != chunkDimensions) {
         std::cout << "Core and chunk must have the same dimensions, but provided core dimensions {"
-                  << coreDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different.\n";
-        return true; 
+                  << coreDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different."
+                  << " Chunking will not proceed. Exiting...\n";
+        exit(EXIT_FAILURE); 
     }
 
     int * coreDimSizes = simulationArea.coreDimensions.getDimSizes();
@@ -57,26 +57,35 @@ bool Simulation::ChunkExceedsCoreDimensions() {
     for (int i = 0; i < coreDimensions; i++) {
         if (chunkDimSizes[i] > coreDimSizes[i]) {
             std::cout << "Provided chunk dimension size {" << chunkDimSizes[i] << "} " <<
-            "exceed core dimension size {" << coreDimSizes[i] << "} at index " << i << "\n"; 
-            return true;
+            "exceed core dimension size {" << coreDimSizes[i] << "} at index " << i 
+            << ". Chunking will not proceed. Exiting...\n"; 
+            exit(EXIT_FAILURE);
         }
     }
-
-    return false;
 }
 
-void Simulation::ReconfigureChunkSize(long maxMem, long requiredMem) {
-    // a simple automatic configuration; need for improvement?
-    int noOfChunks = (int)ceil(requiredMem/maxMem);
-    noOfChunks = noOfChunks == 0 ? 1 : noOfChunks; // needed if required memory much much smaller than maxmem
-    std::cout << "Required memory " << requiredMem << "and max " << maxMem << "\n";
-    std::cout << "No of chunks " << noOfChunks << "\n";
-    // since we're just slicing in i directions, leave k and j as is
-    int newDimSize = (int)ceil(simulationArea.halChunkDimensions.getDimSizes()[0] / noOfChunks);
-    //TODO: maybe some logging to inform user to what value it was updated?
-    std::cout << "New dim size is " << newDimSize << "\n";
-    simulationArea.chunkDimensions.updateDimSize(0, newDimSize);
-    simulationArea.halChunkDimensions.updateDimSize(0, newDimSize+simulationArea.halo);
+void Simulation::ReconfigureChunkSize(long maxMem) {
+    long bytesRequiredForHalloedChunks;
+    int iDimHalSize;
+    std::cout << "Core dimensions " << simulationArea.coreDimensions.getDimensions() << " \n";
+    if (simulationArea.coreDimensions.getDimensions() > 1) {
+        int jDimHalSize = simulationArea.halChunkDimensions.getDimSizes()[1];
+        int kDimHalSize = simulationArea.halChunkDimensions.getDimSizes()[2];
+        bytesRequiredForHalloedChunks = jDimHalSize*kDimHalSize*sizeof(float)*2;
+    } else {
+        bytesRequiredForHalloedChunks = sizeof(float)*2;
+    }
+    iDimHalSize = (int)floor((float)maxMem/(float)bytesRequiredForHalloedChunks);
+    std::cout << "idimHalsize is " << iDimHalSize << " \n";
+    int iDimChunkSize = iDimHalSize-simulationArea.halo*2;
+    if (iDimChunkSize < 1) {
+        std::cout << "Unable to determine an appropriate chunk size. Terminating.\n";
+        exit(EXIT_FAILURE);
+    }
+    simulationArea.halChunkDimensions.updateDimSize(0, iDimHalSize);
+    simulationArea.chunkDimensions.updateDimSize(0, iDimChunkSize);
+    std::cout << "New chunk first dimension size is " << simulationArea.chunkDimensions.getDimSizes()[0] << " \n"
+    << "New halloed chunk first dimension size is " << simulationArea.halChunkDimensions.getDimSizes()[0] << " \n";
 }
 
 void Simulation::ChunkAndCompute() {
@@ -311,10 +320,12 @@ void Simulation::ChunkAndCompute() {
         p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
+    /*
     for (int i = 0; i < coreSize; i++) {
         std::cout << simulationArea.p[i] << " ";
     }
     std::cout << "\n";
+    */
     free(p2);
     free(p1);
 }
