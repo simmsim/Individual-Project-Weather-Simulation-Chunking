@@ -49,6 +49,7 @@ void Simulation::CheckChunkDimensions() {
         std::cout << "Core and chunk must have the same dimensions, but provided core dimensions {"
                   << coreDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different."
                   << " Chunking will not proceed. Exiting...\n";
+        // TODO: shouldn't be abruptly exiting the program - perhaps throw exception instead?
         exit(EXIT_FAILURE); 
     }
 
@@ -59,6 +60,7 @@ void Simulation::CheckChunkDimensions() {
             std::cout << "Provided chunk dimension size {" << chunkDimSizes[i] << "} " <<
             "exceed core dimension size {" << coreDimSizes[i] << "} at index " << i 
             << ". Chunking will not proceed. Exiting...\n"; 
+            // TODO: shouldn't be abruptly exiting the program - perhaps throw exception instead?
             exit(EXIT_FAILURE);
         }
     }
@@ -132,8 +134,8 @@ void Simulation::ChunkAndCompute() {
                         currentIChunk = (coreSizeij % chSizeij) / jChunk;
                         if (jDim > 1 && kDim == 1) {
                             iHalChunk = currentIChunk + 2;
-                            simulationArea.halChunkDimensions.getDimSizes()[0] = iHalChunk;
-                            chHSize =  iHalChunk*jHalChunk*kHalChunk;
+                            simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
+                            chHSize = simulationArea.halChunkDimensions.getSimulationSize();
                         }
                     }
 

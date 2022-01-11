@@ -48,8 +48,8 @@ void fillAndChunk(SimulationRange coreRange, SimulationRange chunkRange,
                         currentIChunk = (coreSizeij % chSizeij) / jChunk;
                         if (jDim > 1 && kDim == 1) {
                             iHalChunk = currentIChunk + 2;
-                            haloRange.getDimSizes()[0] = iHalChunk;
-                            chHSize =  iHalChunk*jHalChunk*kHalChunk;
+                            haloRange.updateDimSize(0, iHalChunk);
+                            chHSize = haloRange.getSimulationSize();
                         }
                     }
 
