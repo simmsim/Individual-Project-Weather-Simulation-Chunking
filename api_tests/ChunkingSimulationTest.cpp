@@ -1,5 +1,5 @@
 #include "../Simulation.h"
-#include "../test_helpers/assertions.h"
+#include "../utility/assertions.h"
 
 #include <iostream>
 #include <string>

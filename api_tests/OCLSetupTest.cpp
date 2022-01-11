@@ -1,5 +1,5 @@
 #include "../OCLSetup.h"
-#include "../test_helpers/assertions.h"
+#include "../utility/assertions.h"
 
 #include <CL/opencl.hpp>
 #include <iostream>

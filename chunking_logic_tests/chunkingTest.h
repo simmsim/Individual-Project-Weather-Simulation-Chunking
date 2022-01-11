@@ -1,5 +1,5 @@
 #include "../SimulationRange.h"
-#include "../test_helpers/assertions.h"
+#include "../utility/assertions.h"
 #include "fillAndChunk.h"
 
 #include <string>
