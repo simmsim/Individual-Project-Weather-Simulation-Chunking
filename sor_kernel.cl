@@ -145,17 +145,21 @@ p(i,j,k-1))/6 &
 void compute_core_region(__global float *p_in, __global float *p_out,
                          const int ip, const int jp) 
 {
-    // TODO find out if offset can be specified in EnqueueNDRange
     int i = get_global_id(0);
     int j = get_global_id(1);
     int k = get_global_id(2);
 
-    p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,0)] = (p_in[F3D2C(ip+2, jp+2, 0,0,0, i+1,j,k)] 
+    // this is only for testing purposes; will be updated to real one
+    p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] + 1;
+    //printf("i: %d, j: %d, k: %d\n ===> %d", i, j, k, p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)]);
+    /*
+    p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = (p_in[F3D2C(ip+2, jp+2, 0,0,0, i+1,j,k)] 
                                             + p_in[F3D2C(ip+2, jp+2, 0,0,0, i-1,j,k)]
                                             + p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j+1,k)]
                                             + p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j-1,k)]
                                             + p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k-1)]
                                             + p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k+1)])/6;
+                                            */
 }
 
 __kernel void sor_superkernel(__global float *p_in, __global float *p_out, 
