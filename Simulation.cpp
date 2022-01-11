@@ -3,6 +3,12 @@
 #include <iostream>
 #include <math.h>
 
+#define PERIODIC 1
+#define INFLOW 2
+#define OUTFLOW 3
+#define TOPBOTTOM 4
+#define CORE 5
+
 Simulation::Simulation(int deviceType, char * programFileName,
                        char * kernelName) {
     oclSetup = OCLSetup(deviceType, programFileName, kernelName);
@@ -117,7 +123,7 @@ void Simulation::ChunkAndCompute() {
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
 
-    int chHSize = iHalChunk*jHalChunk*kHalChunk;
+    int chHSize = iHalChunk*jHalChunk*kHalChunk; // TODO change this to getSimulationSize()
     int noOfChunksInJ = (iDim*jDim) / (iChunk*jChunk);
 
     //float * p1 = simulationArea.p;
@@ -230,12 +236,14 @@ void Simulation::ChunkAndCompute() {
 
                     // ****** openCL bit
                     // TODO: maybe move this bit into a separate method?
+                    //this is repeated
                     size_t sizeOfHChunk = simulationArea.halChunkDimensions.getSimulationSize();
                     cl_int errorCode;
 
                     cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeOfHChunk * sizeof(float), ch1, &errorCode);
                     ErrorHelper::testError(errorCode, "Failed to create a buffer");                    
-                    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, sizeOfHChunk * sizeof(float), nullptr);
+                    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, sizeOfHChunk * sizeof(float), nullptr, &errorCode);
+                    ErrorHelper::testError(errorCode, "Failed to create an out buffer");
 
                     errorCode = oclSetup.kernel.setArg(0, in_p);
                     ErrorHelper::testError(errorCode, "Failed to set a kernel argument");
@@ -248,16 +256,18 @@ void Simulation::ChunkAndCompute() {
                     cl::Event event;
                     if (i_start == 0) {
                         std::cout << "inflow\n";
-                        oclSetup.kernel.setArg(5, 2);
+                        oclSetup.kernel.setArg(5, INFLOW);
                         errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
                         cl::NullRange, nullptr);
                         ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
                         // in-flow
-                    } else if (i_start + iChunk >= iDim) {
+                    } 
+                    
+                    if (i_start + iChunk >= iDim) {
                         // out-flow
                         std::cout << "outflow\n";
                         // TODO: this whole thing could be factored out into a separate method
-                        oclSetup.kernel.setArg(5, 3);
+                        oclSetup.kernel.setArg(5, OUTFLOW);
                         errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
                         cl::NullRange, nullptr);
                         ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
@@ -266,21 +276,27 @@ void Simulation::ChunkAndCompute() {
                     // top-bottom, only applies for 3D
                     if (kDim > 1) {
                         std::cout << "top-bottom\n";
-                        oclSetup.kernel.setArg(5, 4);
+                        oclSetup.kernel.setArg(5, TOPBOTTOM);
                         errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, jHalChunk, 1),
                         cl::NullRange, nullptr);
                         ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
                     }
-
-                    // PERIODIC
-                    oclSetup.kernel.setArg(5, 1);
+                    
+                    // periodic applies to each chunk since we're chunking in such manner that both j sides are included
+                    oclSetup.kernel.setArg(5, PERIODIC);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, 1, kHalChunk),
+                        cl::NullRange, nullptr);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+
+                    std::cout << "core\n";
+                    oclSetup.kernel.setArg(5, CORE);
+                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NDRange(1,1,1), cl::NDRange(currentIChunk, jChunk, kChunk),
                         cl::NullRange, nullptr, &event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
                     
                     event.wait();
 
-                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch2);
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch2);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
 
                     std::cout << "\n After SIMPLE compute\n" << "";
@@ -322,12 +338,12 @@ void Simulation::ChunkAndCompute() {
         p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
-    /*
+    
     for (int i = 0; i < coreSize; i++) {
         std::cout << simulationArea.p[i] << " ";
     }
     std::cout << "\n";
-    */
+    
     free(p2);
     free(p1);
 }
