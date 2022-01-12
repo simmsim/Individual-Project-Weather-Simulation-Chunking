@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#include "../SimulationRange.h"
 
 void printTestResultMessage(bool succeeded, std::string testName) {
     if (succeeded) {
