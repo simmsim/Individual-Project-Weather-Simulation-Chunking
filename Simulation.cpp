@@ -143,11 +143,9 @@ void Simulation::ChunkAndCompute() {
                     // Logic to deal with a leftover chunk.
                     if (i_start + iChunk > iDim) {
                         currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
-                        if (jDim > 1 && kDim == 1) {
-                            iHalChunk = currentIChunk + 2;
-                            simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
-                            haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
-                        }
+                        iHalChunk = currentIChunk + 2;
+                        simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
+                        haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
                     }
 
                     // input chunk
