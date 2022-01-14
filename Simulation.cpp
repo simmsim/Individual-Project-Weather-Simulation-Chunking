@@ -104,7 +104,6 @@ void Simulation::ChunkAndCompute() {
 
     int coreSize = simulationArea.coreDimensions.getSimulationSize();
     float *p2 = (float*)malloc(sizeof(float)*coreSize);
-    std::fill(p2, p2+(coreSize), 0.0);
     // float * p1 = simulationArea.p;
     // Didn't work properly when program was set with just pointing to simulationArea. TODO: check later if it can be fixed.
     float * p1 = (float*)malloc(sizeof(float)*coreSize);
@@ -148,28 +147,26 @@ void Simulation::ChunkAndCompute() {
                         haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
                     }
 
-                    // input chunk
-                    float *ch1 = (float*)malloc(sizeof(float)*haloChunkSize);
-                    std::fill(ch1, ch1+(haloChunkSize), 0.0);
-                    // output chunk
-                    float *ch2 = (float*)malloc(sizeof(float)*haloChunkSize);
-                    std::fill(ch2, ch2+(haloChunkSize), 0.0);
+                    float *inChunk = (float*)malloc(sizeof(float)*haloChunkSize);
+                    float *outChunk = (float*)malloc(sizeof(float)*haloChunkSize);
 
+                    // Build a chunk, copy values in from core.
                     for (int k = 0; k < kHalChunk; k++) {
                         if (((k_start == 0 && k == 0) ||
                             (k_start + kChunk == kDim && k + 1 == kHalChunk)) && kDim > 1) {
-                            // this is halo for bottom plane or top plane; leave as zeroes
+                            // This is halo for bottom plane or top plane; leave as zeros.
                             continue;
                         }
 
                         for (int j = 0; j < jHalChunk; j++) {
                             if (((j_start == 0 && j == 0) ||
                                 (j_start + jChunk == jDim && j + 1 == jHalChunk)) && jDim > 1) {
+                                // This is halo for sides; leave as zeros.
                                 continue;
                             }
 
-                            // TODO: done for 1-point halo: should be more general
-                            // Calculation for offsets are done based on the assumption that we're chunking jChunk = jDim
+                            // TODO: done for 1-point halo: could be more general; future work.
+                            // Calculation for offsets are done based on the assumption that we're chunking jChunk = jDim. 
                             if (kDim == 1 && jDim == 1) {
                                 int inputStartOffset = i_start - 1;
                                 int inputEndOffset = i_start + 1 + currentIChunk;
@@ -181,7 +178,7 @@ void Simulation::ChunkAndCompute() {
                                 if (i_start + currentIChunk >= iDim) {
                                     inputEndOffset = i_start + currentIChunk;
                                 }
-                                std::copy(p1 + inputStartOffset, p1 + inputEndOffset, ch1 + chunkOffset);
+                                std::copy(p1 + inputStartOffset, p1 + inputEndOffset, inChunk + chunkOffset);
                             }  else if (kDim == 1) {
                                 int chunkIdx = j*iHalChunk;
                                 int offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start - 1; // the iChunk must
@@ -199,7 +196,7 @@ void Simulation::ChunkAndCompute() {
                                     inputEndOffset -= 1;
                                 }
 
-                                std::copy(p1 + offset, p1 + inputEndOffset, ch1 + chunkIdx);   
+                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx);   
                             } else {
                                 int offset = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim - 1;
                                 int chunkIdx = j*iHalChunk + k*iHalChunk*jHalChunk;
@@ -225,7 +222,7 @@ void Simulation::ChunkAndCompute() {
                                     inputEndOffset -= 1;
                                 }
 
-                                std::copy(p1 + offset, p1 + inputEndOffset, ch1 + chunkIdx);                          
+                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx);                          
                             }
                         }
                     }
@@ -233,7 +230,7 @@ void Simulation::ChunkAndCompute() {
                     std::cout << "\nCore\n" << "";
                     std::cout << "i_start " << i_start << "\n";
                     for (int idx = 0; idx < haloChunkSize; idx++) {
-                        std::cout << ch1[idx] << " ";
+                        std::cout << inChunk[idx] << " ";
                     }
                     std::cout << "\n\n" << "";
                     */
@@ -244,7 +241,7 @@ void Simulation::ChunkAndCompute() {
                     size_t sizeOfHChunk = simulationArea.halChunkDimensions.getSimulationSize();
                     cl_int errorCode;
 
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch1);
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), inChunk);
 
                     errorCode = oclSetup.kernel.setArg(0, in_p);
                     ErrorHelper::testError(errorCode, "Failed to set a kernel argument");
@@ -296,12 +293,12 @@ void Simulation::ChunkAndCompute() {
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
                     event.wait();
 
-                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch2);
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), outChunk);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
                     /*
                     std::cout << "\n After SIMPLE compute\n" << "";
                     for (int idx = 0; idx < haloChunkSize; idx++) {
-                        std::cout << ch2[idx] << " ";
+                        std::cout << outChunk[idx] << " ";
                     }
                     std::cout << "\n\n" << "";
                     */
@@ -309,26 +306,26 @@ void Simulation::ChunkAndCompute() {
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
                         int chunkIdx = 1;
-                        std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, p2+arrayEnd);
+                        std::copy(outChunk + chunkIdx, outChunk + chunkIdx + currentIChunk, p2+arrayEnd);
                     } else if (kDim == 1) {
                         for (int j = 1; j < jHalChunk - 1; j++) {
                             int chunkIdx = j*iHalChunk + 1;
                             int arrayEnd = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start;
-                            std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, p2+arrayEnd);
+                            std::copy(outChunk + chunkIdx, outChunk + chunkIdx + currentIChunk, p2+arrayEnd);
                         }
                     } else {
                         for (int k = 1; k < kHalChunk - 1; k++) {
                             for (int j = 1; j < jHalChunk - 1; j++) {
                                 int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
                                 int arrayEnd = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iChunk*jChunk*noOfFullChunks + (k-1)*leftoverIChunk*jChunk;
-                                std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, p2+arrayEnd);
+                                std::copy(outChunk + chunkIdx, outChunk + chunkIdx + currentIChunk, p2+arrayEnd);
                             }
                         }
                     }
 
                     // Fly away and be free.
-                    free(ch1);
-                    free(ch2);
+                    free(inChunk);
+                    free(outChunk);
                 }
             }
         }
