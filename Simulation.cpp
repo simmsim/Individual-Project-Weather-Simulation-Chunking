@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <math.h>
+#include <omp.h>
 
 #define PERIODIC 1
 #define INFLOW 2
@@ -101,56 +102,60 @@ void Simulation::ChunkAndCompute() {
     int jDim = simulationArea.coreDimensions.getDimSizes()[1];
     int kDim = simulationArea.coreDimensions.getDimSizes()[2];
 
-    int coreSize = iDim*jDim*kDim;
+    int coreSize = simulationArea.coreDimensions.getSimulationSize();
     float *p2 = (float*)malloc(sizeof(float)*coreSize);
     std::fill(p2, p2+(coreSize), 0.0);
+    // float * p1 = simulationArea.p;
+    // Didn't work properly when program was set with just pointing to simulationArea. TODO: check later if it can be fixed.
+    float * p1 = (float*)malloc(sizeof(float)*coreSize);
+    std::copy(simulationArea.p, simulationArea.p + coreSize, p1);
 
     int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
     int kChunk = simulationArea.chunkDimensions.getDimSizes()[2];
 
     int currentIChunk = iChunk;
-    int chSize = iChunk*jChunk*kChunk;
-
     int coreSizeij = iDim*jDim;
-    int chSizeij = iChunk*jChunk;
-    int noOfChunks = coreSizeij/chSizeij;
-
-    int noOfLeftoverChunks = coreSizeij % chSizeij == 0? 0 : 1;
-    int leftoverIChunk = noOfLeftoverChunks == 1 ? (coreSizeij - noOfChunks*chSizeij)/jChunk : 0;
+    int chunkSizeij = iChunk*jChunk;
+    int noOfFullChunks = coreSizeij/chunkSizeij;
+    int noOfLeftoverChunks = coreSizeij % chunkSizeij == 0 ? 0 : 1;
+    int leftoverIChunk = noOfLeftoverChunks == 1 ? (coreSizeij - noOfFullChunks*chunkSizeij)/jChunk : 0;
 
     int iHalChunk = simulationArea.halChunkDimensions.getDimSizes()[0];
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
 
-    int chHSize = iHalChunk*jHalChunk*kHalChunk; // TODO change this to getSimulationSize()
-    int noOfChunksInJ = (iDim*jDim) / (iChunk*jChunk);
+    int haloChunkSize =simulationArea.halChunkDimensions.getSimulationSize();
 
-    //float * p1 = simulationArea.p;
-    float * p1 = (float*)malloc(sizeof(float)*coreSize);
-    std::copy(simulationArea.p, simulationArea.p + coreSize, p1);
-    int chunkIdx = 0;
+    cl_int err;
+    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create a buffer");                    
+    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create an out buffer");
 
     for (int n = 0; n < simulationArea.iterations; n++) {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        //#pragma omp parallel for collapse(3); TODO: need to think more about whether it's possible to parallize in a way
+        // that gives performance gain.
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
             for (int j_start = 0; j_start < jDim; j_start += jChunk) {
                 for (int i_start = 0; i_start < iDim; i_start += iChunk) {
-                    // Logic to deal with a leftover chunk
+                    // Logic to deal with a leftover chunk.
                     if (i_start + iChunk > iDim) {
-                        currentIChunk = (coreSizeij % chSizeij) / jChunk;
+                        currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
                         if (jDim > 1 && kDim == 1) {
                             iHalChunk = currentIChunk + 2;
                             simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
-                            chHSize = simulationArea.halChunkDimensions.getSimulationSize();
+                            haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
                         }
                     }
 
                     // input chunk
-                    float *ch1 = (float*)malloc(sizeof(float)*chHSize);
-                    std::fill(ch1, ch1+(chHSize), 0.0);
+                    float *ch1 = (float*)malloc(sizeof(float)*haloChunkSize);
+                    std::fill(ch1, ch1+(haloChunkSize), 0.0);
                     // output chunk
-                    float *ch2 = (float*)malloc(sizeof(float)*chHSize);
-                    std::fill(ch2, ch2+(chHSize), 0.0);
+                    float *ch2 = (float*)malloc(sizeof(float)*haloChunkSize);
+                    std::fill(ch2, ch2+(haloChunkSize), 0.0);
 
                     for (int k = 0; k < kHalChunk; k++) {
                         if (((k_start == 0 && k == 0) ||
@@ -181,13 +186,13 @@ void Simulation::ChunkAndCompute() {
                                 std::copy(p1 + inputStartOffset, p1 + inputEndOffset, ch1 + chunkOffset);
                             }  else if (kDim == 1) {
                                 int chunkIdx = j*iHalChunk;
-                                int offset = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk + i_start - 1; // the iChunk must
+                                int offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start - 1; // the iChunk must
                                 // the full chunks'
                                 int inputEndOffset = offset + currentIChunk + 2; // HERE iCHUNK will vary
 
                                 if (i_start == 0) {
                                     chunkIdx += 1; // halo of zero
-                                    offset = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk; 
+                                    offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk; 
                                     inputEndOffset = offset + iChunk + 1; // this iChunk value will always be of full chunks'
                                     // here since i_start == 0 is always full
                                 }
@@ -198,23 +203,23 @@ void Simulation::ChunkAndCompute() {
 
                                 std::copy(p1 + offset, p1 + inputEndOffset, ch1 + chunkIdx);   
                             } else {
-                                int offset = i_start + (j-1)*iChunk*noOfChunksInJ + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim - 1;
+                                int offset = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim - 1;
                                 int chunkIdx = j*iHalChunk + k*iHalChunk*jHalChunk;
                                 int inputEndOffset = offset + currentIChunk + 2;
 
                                 if (i_start == 0) {
                                    chunkIdx += 1; 
-                                   offset = (j-1)*iChunk*noOfChunksInJ + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim;
+                                   offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim;
                                    inputEndOffset = offset + currentIChunk + 1;
                                 }
 
                                 if (k_start == 0) {
-                                    offset = i_start + (j-1)*iChunk*noOfChunksInJ + (j-1)*leftoverIChunk + (k-1)*iDim*jDim - 1;
+                                    offset = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iDim*jDim - 1;
                                     inputEndOffset = offset + currentIChunk + 2;
                                 }
 
                                 if (k_start == 0 && i_start == 0) {
-                                    offset = (j-1)*iChunk*noOfChunksInJ + (j-1)*leftoverIChunk + (k-1)*iDim*jDim;
+                                    offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iDim*jDim;
                                     inputEndOffset = offset + currentIChunk + 1;
                                 }
 
@@ -226,13 +231,14 @@ void Simulation::ChunkAndCompute() {
                             }
                         }
                     }
-
+                    /*
                     std::cout << "\nCore\n" << "";
                     std::cout << "i_start " << i_start << "\n";
-                    for (int idx = 0; idx < chHSize; idx++) {
+                    for (int idx = 0; idx < haloChunkSize; idx++) {
                         std::cout << ch1[idx] << " ";
                     }
                     std::cout << "\n\n" << "";
+                    */
 
                     // ****** openCL bit
                     // TODO: maybe move this bit into a separate method?
@@ -240,10 +246,7 @@ void Simulation::ChunkAndCompute() {
                     size_t sizeOfHChunk = simulationArea.halChunkDimensions.getSimulationSize();
                     cl_int errorCode;
 
-                    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeOfHChunk * sizeof(float), ch1, &errorCode);
-                    ErrorHelper::testError(errorCode, "Failed to create a buffer");                    
-                    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, sizeOfHChunk * sizeof(float), nullptr, &errorCode);
-                    ErrorHelper::testError(errorCode, "Failed to create an out buffer");
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch1);
 
                     errorCode = oclSetup.kernel.setArg(0, in_p);
                     ErrorHelper::testError(errorCode, "Failed to set a kernel argument");
@@ -255,7 +258,7 @@ void Simulation::ChunkAndCompute() {
 
                     cl::Event event;
                     if (i_start == 0) {
-                        std::cout << "inflow\n";
+                        //std::cout << "inflow\n";
                         oclSetup.kernel.setArg(5, INFLOW);
                         errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
                         cl::NullRange, nullptr);
@@ -265,7 +268,7 @@ void Simulation::ChunkAndCompute() {
                     
                     if (i_start + iChunk >= iDim) {
                         // out-flow
-                        std::cout << "outflow\n";
+                        //std::cout << "outflow\n";
                         // TODO: this whole thing could be factored out into a separate method
                         oclSetup.kernel.setArg(5, OUTFLOW);
                         errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
@@ -275,7 +278,7 @@ void Simulation::ChunkAndCompute() {
 
                     // top-bottom, only applies for 3D
                     if (kDim > 1) {
-                        std::cout << "top-bottom\n";
+                        //std::cout << "top-bottom\n";
                         oclSetup.kernel.setArg(5, TOPBOTTOM);
                         errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, jHalChunk, 1),
                         cl::NullRange, nullptr);
@@ -286,24 +289,24 @@ void Simulation::ChunkAndCompute() {
                     oclSetup.kernel.setArg(5, PERIODIC);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, 1, kHalChunk),
                         cl::NullRange, nullptr);
-                    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                    ErrorHelper::testError(errorCode, "F••ailed to enqueue a kernel");
 
-                    std::cout << "core\n";
+                    //std::cout << "core\n";
                     oclSetup.kernel.setArg(5, CORE);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NDRange(1,1,1), cl::NDRange(currentIChunk, jChunk, kChunk),
                         cl::NullRange, nullptr, &event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
-                    
                     event.wait();
 
                     errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), ch2);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
-
+                    /*
                     std::cout << "\n After SIMPLE compute\n" << "";
-                    for (int idx = 0; idx < chHSize; idx++) {
+                    for (int idx = 0; idx < haloChunkSize; idx++) {
                         std::cout << ch2[idx] << " ";
                     }
                     std::cout << "\n\n" << "";
+                    */
 
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
@@ -312,14 +315,14 @@ void Simulation::ChunkAndCompute() {
                     } else if (kDim == 1) {
                         for (int j = 1; j < jHalChunk - 1; j++) {
                             int chunkIdx = j*iHalChunk + 1;
-                            int arrayEnd = (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk + i_start;
+                            int arrayEnd = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start;
                             std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, p2+arrayEnd);
                         }
                     } else {
-                        for (int k = 1; k < kHalChunk - 1; k++) { 
+                        for (int k = 1; k < kHalChunk - 1; k++) {
                             for (int j = 1; j < jHalChunk - 1; j++) {
                                 int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
-                                int arrayEnd = i_start + (j-1)*iChunk*noOfChunks + (j-1)*leftoverIChunk + (k-1)*iChunk*jChunk*noOfChunks + (k-1)*leftoverIChunk*jChunk;
+                                int arrayEnd = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iChunk*jChunk*noOfFullChunks + (k-1)*leftoverIChunk*jChunk;
                                 std::copy(ch2 + chunkIdx, ch2 + chunkIdx + currentIChunk, p2+arrayEnd);
                             }
                         }
@@ -331,6 +334,9 @@ void Simulation::ChunkAndCompute() {
                 }
             }
         }
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
+        std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
         
         // the output array becomes our problem/input array for next iteration
         float * intermediate = p1;
@@ -338,11 +344,12 @@ void Simulation::ChunkAndCompute() {
         p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
-    
+    /*
     for (int i = 0; i < coreSize; i++) {
         std::cout << simulationArea.p[i] << " ";
     }
     std::cout << "\n";
+    */
     
     free(p2);
     free(p1);
