@@ -1,5 +1,5 @@
 CPP=g++
-CC=-g
+CC=-g -O3 -Wall
 LIBS=-lOpenCL -fopenmp
 
 targets=ChunkingSimulationTest OCLSetupTest SimulationRangeTest
