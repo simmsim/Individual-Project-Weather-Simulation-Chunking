@@ -5,6 +5,7 @@
 
 typedef struct simulationAreaStruct {
     cl_float *p;
+    cl_float *rhs;
     int halo;
     int iterations;
     SimulationRange coreDimensions;
@@ -17,7 +18,7 @@ class Simulation {
         OCLSetup oclSetup;
         simulationAreaStruct simulationArea;
 
-        void InitializeSimulationArea(cl_float * p, int halo, int iterations, 
+        void InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
                                       SimulationRange coreDimensions, SimulationRange chunkDimensions);
         void CheckChunkDimensions();
         void CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
@@ -29,7 +30,7 @@ class Simulation {
         Simulation(int deviceType, char * programFileName,
                     char * kernelName);
 
-        void RunSimulation(cl_float * p, int halo, int iterations,
+        void RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
                            float maxSimulationAreaMemUsage,
                            SimulationRange coreDimensions,
                            SimulationRange chunkDimensions);

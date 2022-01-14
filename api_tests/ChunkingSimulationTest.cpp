@@ -15,11 +15,13 @@ Simulation initializeAndRun(SimulationRange coreRange, SimulationRange chunkRang
     Simulation simulation = Simulation(deviceType, programFileName, kernelName);
     int pSize = coreRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
+    float *rhs = (float*)malloc(sizeof(float)*pSize);
     for (int idx = 0; idx < pSize; idx++) {
         p[idx] = idx + 1;
+        rhs[idx] = 1.0;
     }
 
-    simulation.RunSimulation(p, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);    
+    simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);    
     return simulation;
 }
 

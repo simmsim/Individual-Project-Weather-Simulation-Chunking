@@ -15,19 +15,21 @@ Simulation::Simulation(int deviceType, char * programFileName,
     oclSetup = OCLSetup(deviceType, programFileName, kernelName);
 }
 
-void Simulation::RunSimulation(cl_float * p, int halo, int iterations,
+void Simulation::RunSimulation(cl_float * p, cl_float * rhs,
+                               int halo, int iterations,
                                float maxSimulationAreaMemUsage,
                                SimulationRange coreDimensions, 
                                SimulationRange chunkDimensions = SimulationRange()) {
-    InitializeSimulationArea(p, halo, iterations, coreDimensions, chunkDimensions);
+    InitializeSimulationArea(rhs, p, halo, iterations, coreDimensions, chunkDimensions);
     CheckChunkDimensions();
     CheckSpecifiedChunkSize(maxSimulationAreaMemUsage);
     ChunkAndCompute();
 }
 
-void Simulation::InitializeSimulationArea(cl_float * p, int halo, int iterations, 
+void Simulation::InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
                                           SimulationRange coreDimensions, SimulationRange chunkDimensions) {
     simulationArea.p = p;
+    simulationArea.rhs = rhs;
     simulationArea.halo = halo;
     simulationArea.iterations = iterations;
     simulationArea.coreDimensions = coreDimensions;
@@ -128,7 +130,9 @@ void Simulation::ChunkAndCompute() {
 
     cl_int err;
     cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create a buffer");                    
+    ErrorHelper::testError(err, "Failed to create an in buffer"); 
+    cl::Buffer rhsBuffer(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create an rhs buffer");                    
     cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
@@ -148,6 +152,7 @@ void Simulation::ChunkAndCompute() {
                     }
 
                     float *inChunk = (float*)malloc(sizeof(float)*haloChunkSize);
+                    float *rhsChunk = (float*)malloc(sizeof(float)*haloChunkSize);
                     float *outChunk = (float*)malloc(sizeof(float)*haloChunkSize);
 
                     // Build a chunk, copy values in from core.
@@ -179,6 +184,7 @@ void Simulation::ChunkAndCompute() {
                                     inputEndOffset = i_start + currentIChunk;
                                 }
                                 std::copy(p1 + inputStartOffset, p1 + inputEndOffset, inChunk + chunkOffset);
+                                std::copy(simulationArea.rhs + inputStartOffset, simulationArea.rhs + inputEndOffset, rhsChunk + chunkOffset);
                             }  else if (kDim == 1) {
                                 int chunkIdx = j*iHalChunk;
                                 int offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start - 1;
@@ -194,7 +200,8 @@ void Simulation::ChunkAndCompute() {
                                     inputEndOffset -= 1;
                                 }
 
-                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx);   
+                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx); 
+                                std::copy(simulationArea.rhs + offset, simulationArea.rhs + inputEndOffset, rhsChunk + chunkIdx);   
                             } else {
                                 int offset = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim - 1;
                                 int chunkIdx = j*iHalChunk + k*iHalChunk*jHalChunk;
@@ -220,7 +227,8 @@ void Simulation::ChunkAndCompute() {
                                     inputEndOffset -= 1;
                                 }
 
-                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx);                          
+                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx);   
+                                std::copy(simulationArea.rhs + offset, simulationArea.rhs + inputEndOffset, rhsChunk + chunkIdx);                       
                             }
                         }
                     }
@@ -233,12 +241,15 @@ void Simulation::ChunkAndCompute() {
 
                     errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), inChunk);
                     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, sizeOfHChunk * sizeof(float), rhsChunk);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
 
                     oclSetup.kernel.setArg(0, in_p);
                     oclSetup.kernel.setArg(1, out_p);
-                    oclSetup.kernel.setArg(2, currentIChunk);
-                    oclSetup.kernel.setArg(3, jChunk);
-                    oclSetup.kernel.setArg(4, kChunk);
+                    oclSetup.kernel.setArg(2, rhsBuffer);
+                    oclSetup.kernel.setArg(3, currentIChunk);
+                    oclSetup.kernel.setArg(4, jChunk);
+                    oclSetup.kernel.setArg(5, kChunk);
 
                     if (i_start == 0) {
                         EnqueueKernel(INFLOW, cl::NDRange(1, jHalChunk, kHalChunk));
@@ -257,7 +268,7 @@ void Simulation::ChunkAndCompute() {
                     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk, 1, kHalChunk));
 
                     cl::Event event;
-                    oclSetup.kernel.setArg(5, CORE);
+                    oclSetup.kernel.setArg(6, CORE);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NDRange(1,1,1), cl::NDRange(currentIChunk, jChunk, kChunk),
                         cl::NullRange, nullptr, &event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
@@ -295,6 +306,7 @@ void Simulation::ChunkAndCompute() {
 
                     // Fly away and be free.
                     free(inChunk);
+                    free(rhsChunk);
                     free(outChunk);
                 }
             }
@@ -321,7 +333,7 @@ void Simulation::ChunkAndCompute() {
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
-    oclSetup.kernel.setArg(5, type);
+    oclSetup.kernel.setArg(6, type);
     cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + type);
 }
