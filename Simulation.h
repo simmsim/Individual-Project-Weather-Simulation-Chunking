@@ -23,6 +23,7 @@ class Simulation {
         void CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
         void ReconfigureChunkSize(long maxMem);
         void ChunkAndCompute();
+        void EnqueueKernel(int type, cl::NDRange range);
 
     public:        
         Simulation(int deviceType, char * programFileName,

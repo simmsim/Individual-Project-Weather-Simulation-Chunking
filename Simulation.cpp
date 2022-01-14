@@ -102,7 +102,7 @@ void Simulation::ChunkAndCompute() {
     int jDim = simulationArea.coreDimensions.getDimSizes()[1];
     int kDim = simulationArea.coreDimensions.getDimSizes()[2];
 
-    int coreSize = simulationArea.coreDimensions.getSimulationSize();
+    size_t coreSize = simulationArea.coreDimensions.getSimulationSize();
     float *p2 = (float*)malloc(sizeof(float)*coreSize);
     // float * p1 = simulationArea.p;
     // Didn't work properly when program was set with just pointing to simulationArea. TODO: check later if it can be fixed.
@@ -124,7 +124,7 @@ void Simulation::ChunkAndCompute() {
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
 
-    int haloChunkSize =simulationArea.halChunkDimensions.getSimulationSize();
+    size_t haloChunkSize =simulationArea.halChunkDimensions.getSimulationSize();
 
     cl_int err;
     cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
@@ -181,15 +181,13 @@ void Simulation::ChunkAndCompute() {
                                 std::copy(p1 + inputStartOffset, p1 + inputEndOffset, inChunk + chunkOffset);
                             }  else if (kDim == 1) {
                                 int chunkIdx = j*iHalChunk;
-                                int offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start - 1; // the iChunk must
-                                // the full chunks'
-                                int inputEndOffset = offset + currentIChunk + 2; // HERE iCHUNK will vary
+                                int offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + i_start - 1;
+                                int inputEndOffset = offset + currentIChunk + 2;
 
                                 if (i_start == 0) {
                                     chunkIdx += 1; // halo of zero
                                     offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk; 
-                                    inputEndOffset = offset + iChunk + 1; // this iChunk value will always be of full chunks'
-                                    // here since i_start == 0 is always full
+                                    inputEndOffset = offset + iChunk + 1;
                                 }
                                 
                                 if (i_start + iChunk >= iDim) {
@@ -226,71 +224,43 @@ void Simulation::ChunkAndCompute() {
                             }
                         }
                     }
-                    /*
-                    std::cout << "\nCore\n" << "";
-                    std::cout << "i_start " << i_start << "\n";
-                    for (int idx = 0; idx < haloChunkSize; idx++) {
-                        std::cout << inChunk[idx] << " ";
-                    }
-                    std::cout << "\n\n" << "";
-                    */
 
                     // ****** openCL bit
                     // TODO: maybe move this bit into a separate method?
-                    //this is repeated
+                    // Need to get halChuk size as it might have been recalculated for a leftover chunk.
                     size_t sizeOfHChunk = simulationArea.halChunkDimensions.getSimulationSize();
                     cl_int errorCode;
 
                     errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), inChunk);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
 
-                    errorCode = oclSetup.kernel.setArg(0, in_p);
-                    ErrorHelper::testError(errorCode, "Failed to set a kernel argument");
-                    errorCode = oclSetup.kernel.setArg(1, out_p);
-                    ErrorHelper::testError(errorCode, "Failed to set a kernel argument");
+                    oclSetup.kernel.setArg(0, in_p);
+                    oclSetup.kernel.setArg(1, out_p);
                     oclSetup.kernel.setArg(2, currentIChunk);
                     oclSetup.kernel.setArg(3, jChunk);
                     oclSetup.kernel.setArg(4, kChunk);
 
-                    cl::Event event;
                     if (i_start == 0) {
-                        //std::cout << "inflow\n";
-                        oclSetup.kernel.setArg(5, INFLOW);
-                        errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
-                        cl::NullRange, nullptr);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
-                        // in-flow
+                        EnqueueKernel(INFLOW, cl::NDRange(1, jHalChunk, kHalChunk));
                     } 
                     
                     if (i_start + iChunk >= iDim) {
-                        // out-flow
-                        //std::cout << "outflow\n";
-                        // TODO: this whole thing could be factored out into a separate method
-                        oclSetup.kernel.setArg(5, OUTFLOW);
-                        errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(1, jHalChunk, kHalChunk),
-                        cl::NullRange, nullptr);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                        EnqueueKernel(OUTFLOW, cl::NDRange(1, jHalChunk, kHalChunk));
                     } 
 
                     // top-bottom, only applies for 3D
                     if (kDim > 1) {
-                        //std::cout << "top-bottom\n";
-                        oclSetup.kernel.setArg(5, TOPBOTTOM);
-                        errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, jHalChunk, 1),
-                        cl::NullRange, nullptr);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                        EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk, jHalChunk, 1));
                     }
                     
-                    // periodic applies to each chunk since we're chunking in such manner that both j sides are included
-                    oclSetup.kernel.setArg(5, PERIODIC);
-                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(iHalChunk, 1, kHalChunk),
-                        cl::NullRange, nullptr);
-                    ErrorHelper::testError(errorCode, "F••ailed to enqueue a kernel");
+                    // Periodic applies to each chunk since we're chunking in such manner that both j sides are included.
+                    EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk, 1, kHalChunk));
 
-                    //std::cout << "core\n";
+                    cl::Event event;
                     oclSetup.kernel.setArg(5, CORE);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NDRange(1,1,1), cl::NDRange(currentIChunk, jChunk, kChunk),
                         cl::NullRange, nullptr, &event);
-                    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel");
+                    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
                     event.wait();
 
                     errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), outChunk);
@@ -348,4 +318,10 @@ void Simulation::ChunkAndCompute() {
     
     free(p2);
     free(p1);
+}
+
+void Simulation::EnqueueKernel(int type, cl::NDRange range) {
+    oclSetup.kernel.setArg(5, type);
+    cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
+    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + type);
 }

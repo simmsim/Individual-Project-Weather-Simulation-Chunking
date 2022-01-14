@@ -4,7 +4,7 @@ class SimulationRange {
     private:
         int dimSizes[3];
         int dimensions;
-        int simulationSize;
+        size_t simulationSize;
 
     public:    
         SimulationRange() : dimensions(0) {
