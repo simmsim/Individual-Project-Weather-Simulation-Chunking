@@ -252,24 +252,25 @@ void Simulation::ChunkAndCompute() {
                     oclSetup.kernel.setArg(5, kChunk);
 
                     if (i_start == 0) {
-                        EnqueueKernel(INFLOW, cl::NDRange(1, jHalChunk, kHalChunk));
+                        EnqueueKernel(INFLOW, cl::NDRange(1*jHalChunk*kHalChunk));
                     } 
                     
                     if (i_start + iChunk >= iDim) {
-                        EnqueueKernel(OUTFLOW, cl::NDRange(1, jHalChunk, kHalChunk));
+                        EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));
                     } 
 
                     // top-bottom, only applies for 3D
                     if (kDim > 1) {
-                        EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk, jHalChunk, 1));
+                        EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));
                     }
                     
                     // Periodic applies to each chunk since we're chunking in such manner that both j sides are included.
-                    EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk, 1, kHalChunk));
+                    EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
 
                     cl::Event event;
-                    oclSetup.kernel.setArg(6, CORE);
-                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NDRange(1,1,1), cl::NDRange(currentIChunk, jChunk, kChunk),
+                    int coreState = CORE;
+                    oclSetup.kernel.setArg(6, &coreState);
+                    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(currentIChunk*jChunk*kChunk),
                         cl::NullRange, nullptr, &event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
                     event.wait();
@@ -321,6 +322,7 @@ void Simulation::ChunkAndCompute() {
         p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
+    
     /*
     for (int i = 0; i < coreSize; i++) {
         std::cout << simulationArea.p[i] << " ";
@@ -333,7 +335,7 @@ void Simulation::ChunkAndCompute() {
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
-    oclSetup.kernel.setArg(6, type);
+    oclSetup.kernel.setArg(6, &type);
     cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + type);
 }
