@@ -1,7 +1,9 @@
 #include <iostream>
 #include <string>
 
-#include "../SimulationRange.h"
+#if defined(OCLSETUPTEST) 
+    #include "../SimulationRange.h"
+#endif
 
 void printTestResultMessage(bool succeeded, std::string testName) {
     if (succeeded) {
