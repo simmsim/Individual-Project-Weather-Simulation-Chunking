@@ -102,7 +102,7 @@ void compute_top_bottom_conditions(__global float *p_in, int ip, int jp, int kp)
 
 void compute_core_region(__global float *p_in, __global float *p_out, __global float *rhs, int ip, int jp, int kp) 
 {
-    /*
+    
     const float cn1 = 1.0 / 3.0;
     const float cn2l = 0.5;
     const float cn2s = 0.5;
@@ -111,7 +111,7 @@ void compute_core_region(__global float *p_in, __global float *p_out, __global f
     const float cn4l = 0.5;
     const float cn4s = 0.5;
     const float omega = 1.0;
-    */
+    
     /*
     int i = get_global_id(0);
     int j = get_global_id(1);
@@ -127,7 +127,7 @@ void compute_core_region(__global float *p_in, __global float *p_out, __global f
     int j = j_rel + 1;
     int i_rel = ((global_id-(k_rel*(j_range*i_range)))-(j_rel*i_range));
     int i = i_rel + 1;
-    /*
+    
     float relmtp = omega*(cn1*(
         cn2l*p_in[F3D2C(ip+2, jp+2, 0,0,0, i+1,j,k)] +
         cn2s*p_in[F3D2C(ip+2, jp+2, 0,0,0, i-1,j,k)] +
@@ -137,12 +137,12 @@ void compute_core_region(__global float *p_in, __global float *p_out, __global f
         cn4s*p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k-1)] -
         rhs[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)]) - 
         p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)]);
-    */
+    
 
     // this is only for testing purposes; will be updated to real one
-    p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] + rhs[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)];
+    //p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] + rhs[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)];
     
-    //p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] + relmtp;
+    p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] + relmtp;
 }
 
 __kernel void sor_superkernel(__global float *p_in, __global float *p_out, __global float *rhs,
