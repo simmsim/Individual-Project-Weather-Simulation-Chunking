@@ -1,82 +1,90 @@
 #include "../Simulation.h"
 #include "../utility/assertions.h"
+#include "../utility/domain_generator.h"
 
 #include <iostream>
 #include <string>
 
 int deviceType = CPU;
 int halo = 1; // 1-point halo
-int iterations = 1;
 char * programFileName = (char*) "../sor_kernel.cl";
 char * kernelName = (char*) "sor_superkernel";
 
-Simulation initializeAndRun(SimulationRange coreRange, SimulationRange chunkRange,
-                         float maxSimulationAreaMemUsage) {
+Simulation initializeAndRun(float * p, float * rhs,
+                            SimulationRange coreRange, SimulationRange chunkRange,
+                            float maxSimulationAreaMemUsage, int iterations) {
     Simulation simulation = Simulation(deviceType, programFileName, kernelName);
     int pSize = coreRange.getSimulationSize();
-    float *p = (float*)malloc(sizeof(float)*pSize);
-    float *rhs = (float*)malloc(sizeof(float)*pSize);
-    for (int idx = 0; idx < pSize; idx++) {
-        p[idx] = idx + 1;
-        rhs[idx] = 1.0;
-    }
+
+    generateDomain(p, rhs, coreRange);
 
     simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);    
     return simulation;
 }
 
-void testProcessingHaltsIfChunkDimsExceedCoreDims() {
+void testChunkDimensionsRecalculated() {
     // ARRANGE
     SimulationRange coreRange = SimulationRange(4, 4, 2);
     SimulationRange chunkRange = SimulationRange(3, 4, 2);
     float maxSimulationAreaMemUsage = 0.00004;
+    int iterations = 1;
+    int pSize = coreRange.getSimulationSize();
+    float *p = (float*)malloc(sizeof(float)*pSize);
+    float *rhs = (float*)malloc(sizeof(float)*pSize);
 
-    // EXPECTATIONS
-    float expectedSimulationArea[32] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 
-                            18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33};
+    // EXPECTED
     int expectedDimensionValue = 2;
+    float expectedValue = -0.0768519;
 
     // ACT
-    Simulation simulation = initializeAndRun(coreRange, chunkRange, maxSimulationAreaMemUsage);
+    Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
 
     // ASSERT
     SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
     int actualDimensionValue = newChunkRange.getDimSizes()[0];
     float * actualSimulationArea = simulation.getSimulationArea().p;
+    float actualValue =  actualSimulationArea[F3D2C(4+2,4+2, 0,0,0,4/2,4/2,2/2)];
 
-    assertEquals(expectedSimulationArea, actualSimulationArea, coreRange.getSimulationSize(), 
-                "processingHaltsIfChunkDimsExceedCoreDims: simulation area has been computed correctly");
     assertEquals(expectedDimensionValue, actualDimensionValue, 
-                "processingHaltsIfChunkDimsExceedCoreDims: new chunk dimensions was re-computed correctly.");
+                "testChunkDimensionsRecalculated: new chunk dimensions was re-computed correctly.");
+
+    assertEquals(expectedValue, actualValue, 
+                "testChunkDimensionsRecalculated: simulation area has been computed correctly.");
 
     // TEARDOWN
-    free(simulation.getSimulationArea().p);
+    free(p);
+    free(rhs);
 }
 
-// EXPECTED VALUES WILL HAVE TO BE UPDATED ONCE CORE CALC KERNEL IS DONE
 void testProcessingSimpleCase() {
     // ARRANGE
     SimulationRange coreRange = SimulationRange(4, 4, 2);
     SimulationRange chunkRange = SimulationRange(2, 4, 2);
+    int iterations = 3;
     float maxSimulationAreaMemUsage = 95;
+    int pSize = coreRange.getSimulationSize();
+    float *p = (float*)malloc(sizeof(float)*pSize);
+    float *rhs = (float*)malloc(sizeof(float)*pSize);
 
-    float expectedSimulationArea[32] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 
-                            18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33};
+    // EXPECTED
+    float expectedValue = -0.0768519;
 
     // ACT
-    Simulation simulation = initializeAndRun(coreRange, chunkRange, maxSimulationAreaMemUsage);
+    Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
 
     // ASSERT
     float * actualSimulationArea = simulation.getSimulationArea().p;
-    assertEquals(expectedSimulationArea, actualSimulationArea, coreRange.getSimulationSize(), "testProcessingSimpleCase");
+    float actualValue =  actualSimulationArea[F3D2C(4+2,4+2, 0,0,0,4/2,4/2,2/2)];
+    assertEquals(expectedValue, actualValue, "testProcessingSimpleCase");
 
     // TEARDOWN
-    free(simulation.getSimulationArea().p);
+    free(p);
+    free(rhs);
 }
 
 int main(void) {
-    testProcessingHaltsIfChunkDimsExceedCoreDims();
+    testChunkDimensionsRecalculated();
     testProcessingSimpleCase();
-
+    
     return 0;
 }
