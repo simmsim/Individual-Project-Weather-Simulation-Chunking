@@ -20,7 +20,7 @@ void Simulation::RunSimulation(cl_float * p, cl_float * rhs,
                                float maxSimulationAreaMemUsage,
                                SimulationRange coreDimensions, 
                                SimulationRange chunkDimensions = SimulationRange()) {
-    InitializeSimulationArea(rhs, p, halo, iterations, coreDimensions, chunkDimensions);
+    InitializeSimulationArea(p, rhs, halo, iterations, coreDimensions, chunkDimensions);
     CheckChunkDimensions();
     CheckSpecifiedChunkSize(maxSimulationAreaMemUsage);
     ChunkAndCompute();
@@ -110,6 +110,7 @@ void Simulation::ChunkAndCompute() {
     // Didn't work properly when program was set with just pointing to simulationArea. TODO: check later if it can be fixed.
     float * p1 = (float*)malloc(sizeof(float)*coreSize);
     std::copy(simulationArea.p, simulationArea.p + coreSize, p1);
+
 
     int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
@@ -315,21 +316,20 @@ void Simulation::ChunkAndCompute() {
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
         std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
-        
+    
         // the output array becomes our problem/input array for next iteration
         float * intermediate = p1;
         p1 = p2;
         p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
-    
     /*
+    std::cout << "SimulationArea.p\n";
     for (int i = 0; i < coreSize; i++) {
         std::cout << simulationArea.p[i] << " ";
     }
     std::cout << "\n";
     */
-    
     free(p2);
     free(p1);
 }
