@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 
+#define OCLSETUPTEST
+
 void checkOpenCLIsWorking() {
     cl_int errorCode;
     int deviceType = CPU;

@@ -10,7 +10,7 @@ ChunkingSimulationTest:
 	$(CPP) $(CC) ChunkingSimulationTest.cpp -o ChunkingSimulationTest ../Simulation.cpp ../OCLSetup.cpp ../ErrorHelper.cpp $(LIBS)
 
 OCLSetupTest:
-	$(CPP) $(CC) OCLSetupTest.cpp -o OCLSetupTest ../OCLSetup.cpp ../ErrorHelper.cpp $(LIBS)
+	$(CPP) $(CC) -DOCLSETUPTEST OCLSetupTest.cpp -o OCLSetupTest ../OCLSetup.cpp ../ErrorHelper.cpp $(LIBS)
 
 SimulationRangeTest:
 	$(CPP) $(CC) SimulationRangeTest.cpp -o SimulationRangeTest
