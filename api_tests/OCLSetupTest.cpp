@@ -8,13 +8,13 @@
 #define OCLSETUPTEST
 
 void checkOpenCLIsWorking() {
-    cl_int errorCode;
+    int err;
     int deviceType = CPU;
     char * programFileName = (char*) "simpleKernel.cl";
     char * kernelName = (char*) "simple_kernel";
     float expected[10] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
-    OCLSetup oclSetup = OCLSetup(deviceType, programFileName, kernelName);
+    OCLSetup oclSetup = OCLSetup(deviceType, programFileName, kernelName, &err);
 
     int inputArraySize = 10;
     float *inputArray = (float*)malloc(sizeof(float)*inputArraySize);
@@ -31,12 +31,12 @@ void checkOpenCLIsWorking() {
     oclSetup.kernel.setArg(2, 6);
 
     cl::Event event;
-    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(inputArraySize),
+    oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(inputArraySize),
     cl::NullRange, nullptr, &event);
 
     event.wait();
 
-    errorCode = oclSetup.commandQueue.enqueueReadBuffer(buf, CL_TRUE, 0, inputArraySize * sizeof(float), outputArray);
+    oclSetup.commandQueue.enqueueReadBuffer(buf, CL_TRUE, 0, inputArraySize * sizeof(float), outputArray);
     assertEquals(expected, outputArray, inputArraySize, "checkOpenCLIsWorking");
     
     free(inputArray);
@@ -45,5 +45,6 @@ void checkOpenCLIsWorking() {
 
 int main(void) {
     checkOpenCLIsWorking();
+    
     return 0;
 }

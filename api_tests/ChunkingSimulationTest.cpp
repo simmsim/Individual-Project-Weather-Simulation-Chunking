@@ -13,11 +13,11 @@ char * kernelName = (char*) "sor_superkernel";
 Simulation initializeAndRun(float * p, float * rhs,
                             SimulationRange coreRange, SimulationRange chunkRange,
                             float maxSimulationAreaMemUsage, int iterations) {
-    Simulation simulation = Simulation(deviceType, programFileName, kernelName);
+    int err;
+    Simulation simulation = Simulation(deviceType, programFileName, kernelName, &err);
     int pSize = coreRange.getSimulationSize();
 
     generateDomain(p, rhs, coreRange);
-
     simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);   
     return simulation;
 }
