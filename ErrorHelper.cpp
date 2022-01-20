@@ -1,18 +1,19 @@
 #include "ErrorHelper.h"
 
-
 void ErrorHelper::printError(cl_int errorCode, const char* description) {
     printf("Error: %s. Error code %d: %s", description, 
         errorCode, getErrorCodeDescription(errorCode));
 }
 
-void ErrorHelper::testError(cl_int errorCode, std::string description) 
+int ErrorHelper::testError(cl_int errorCode, std::string description) 
 {
     if (errorCode != CL_SUCCESS) 
     {
         printError(errorCode, description.c_str());
-        exit(EXIT_FAILURE);
+        return -1;
     }
+
+    return 0;
 }
 
 const char* ErrorHelper::getErrorCodeDescription(cl_int errorCode)
