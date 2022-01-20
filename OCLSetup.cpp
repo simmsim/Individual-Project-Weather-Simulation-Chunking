@@ -5,16 +5,24 @@
 #include <iostream>
 #include <fstream>
 
-
 OCLSetup::OCLSetup(int deviceType, char * programFileName,
-                    char * kernelName) {
-    CreateContext(deviceType);
+                   char * kernelName, int * err) {
+    *err = OCLSETUP_SUCCESS;
+    if (CreateContext(deviceType) != CL_SUCCESS) {
+        *err = OCLSETUP_FAILURE;
+    }
     SetDeviceProperties();
-    CreateCommandQueue();
-    CreateKernelFromProgram(programFileName, kernelName);
+    if (CreateCommandQueue() != CL_SUCCESS) {
+        std::cout << "is it here queue\n";
+        *err = OCLSETUP_FAILURE;
+    }
+    if (CreateKernelFromProgram(programFileName, kernelName) != CL_SUCCESS) {
+        std::cout << "is it here program\n";
+        *err = OCLSETUP_FAILURE;
+    }
 }
 
-void OCLSetup::CreateContext(int deviceType_) {
+int OCLSetup::CreateContext(int deviceType_) {
     std::vector<cl::Platform> platforms;
     std::vector<cl::Device> platformDevices;
     cl_int errorCode;
@@ -22,7 +30,7 @@ void OCLSetup::CreateContext(int deviceType_) {
     errorCode = cl::Platform::get(&platforms);
     if (errorCode != CL_SUCCESS || platforms.size() == 0) {
         ErrorHelper::printError(errorCode, "Failed to find any platforms");
-        exit(EXIT_FAILURE);
+        return errorCode;
     }
 
     deviceProperties.deviceType = deviceType_ == CPU ? CL_DEVICE_TYPE_CPU : CL_DEVICE_TYPE_GPU;
@@ -32,10 +40,12 @@ void OCLSetup::CreateContext(int deviceType_) {
         std::cout << "No devices found for the type: " << deviceProperties.deviceType << ". Will use any other available device\n";
         platforms[0].getDevices(CL_DEVICE_TYPE_ALL, &platformDevices);
         ErrorHelper::testError(platformDevices.size() > 0 ? CL_SUCCESS : -1, "Failed to find any devices on platform");
+        return CL_DEVICE_NOT_AVAILABLE;
     }
 
     device = platformDevices[0];
     context = cl::Context(device);
+    return CL_SUCCESS;
 }
 
 void OCLSetup::SetDeviceProperties() {
@@ -43,14 +53,15 @@ void OCLSetup::SetDeviceProperties() {
     deviceProperties.maxMemAllocSize = device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
 }
 
-void OCLSetup::CreateCommandQueue() {
+int OCLSetup::CreateCommandQueue() {
     cl_int errorCode;
     commandQueue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &errorCode);
     ErrorHelper::testError(errorCode, "Failed to create command queue for the device");
+    return errorCode;
 }
 
-void OCLSetup::CreateKernelFromProgram(char * programFileName, 
-                                       char * kernelName) {
+int OCLSetup::CreateKernelFromProgram(char * programFileName, 
+                                      char * kernelName) {
     cl_int errorCode;                                       
 
     std::ifstream file(programFileName);
@@ -70,4 +81,6 @@ void OCLSetup::CreateKernelFromProgram(char * programFileName,
     program = kernelProgram;
     kernel = cl::Kernel(program, kernelName, &errorCode);
     ErrorHelper::testError(errorCode, "Failed to create the kernel");
+
+    return errorCode;
 }

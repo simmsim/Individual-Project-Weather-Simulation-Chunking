@@ -1,9 +1,8 @@
 #include <CL/opencl.hpp>
 #include <string>
 
-#define CL_HPP_TARGET_OPENCL_VERSION 200
-
 #include "ErrorHelper.h"
+#include "ErrorCodes.h"
 
 #define CPU 0
 #define GPU 1
@@ -25,11 +24,11 @@ class OCLSetup {
 
         OCLSetup() = default;
         OCLSetup(int deviceType, char * programFileName,
-                 char * kernelName);
+                 char * kernelName, int * err);
 
-        void CreateContext(int deviceType);
+        int CreateContext(int deviceType);
         void SetDeviceProperties();
-        void CreateCommandQueue();
-        void CreateKernelFromProgram(char * programFileName, 
+        int CreateCommandQueue();
+        int CreateKernelFromProgram(char * programFileName, 
                                      char * kernelName);
 };

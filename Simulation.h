@@ -29,7 +29,7 @@ class Simulation {
 
     public:        
         Simulation(int deviceType, char * programFileName,
-                    char * kernelName);
+                    char * kernelName, int * err);
 
         int RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
                            float maxSimulationAreaMemUsage,

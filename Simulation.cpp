@@ -13,8 +13,8 @@
 #define ARR_BLOCKS 3
 
 Simulation::Simulation(int deviceType, char * programFileName,
-                       char * kernelName) {
-    oclSetup = OCLSetup(deviceType, programFileName, kernelName);
+                       char * kernelName, int * err) {
+    oclSetup = OCLSetup(deviceType, programFileName, kernelName, err);
 }
 
 int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
