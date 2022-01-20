@@ -1,5 +1,6 @@
 #include "OCLSetup.h"
 #include "SimulationRange.h"
+#include "ErrorCodes.h"
 
 #include <CL/opencl.hpp>
 
@@ -20,9 +21,9 @@ class Simulation {
 
         void InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
                                       SimulationRange coreDimensions, SimulationRange chunkDimensions);
-        void CheckChunkDimensions();
-        void CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
-        void ReconfigureChunkSize(long maxMem);
+        int CheckChunkDimensions();
+        int CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
+        int ReconfigureChunkSize(long maxMem);
         void ChunkAndCompute();
         void EnqueueKernel(int type, cl::NDRange range);
 
@@ -30,7 +31,7 @@ class Simulation {
         Simulation(int deviceType, char * programFileName,
                     char * kernelName);
 
-        void RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
+        int RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
                            float maxSimulationAreaMemUsage,
                            SimulationRange coreDimensions,
                            SimulationRange chunkDimensions);
