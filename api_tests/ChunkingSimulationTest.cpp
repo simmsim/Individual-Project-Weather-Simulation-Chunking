@@ -18,16 +18,44 @@ Simulation initializeAndRun(float * p, float * rhs,
 
     generateDomain(p, rhs, coreRange);
 
-    simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);    
+    simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);   
     return simulation;
+}
+
+void testRecomputeChunksFailure() {
+    // ARRANGE
+    SimulationRange coreRange = SimulationRange(4, 4, 2);
+    SimulationRange chunkRange = SimulationRange(3, 4, 2);
+    float maxSimulationAreaMemUsage = 0.00004;
+    int iterations = 1;
+    int pSize = coreRange.getSimulationSize();
+    float *p = (float*)malloc(sizeof(float)*pSize);
+    float *rhs = (float*)malloc(sizeof(float)*pSize);
+
+    // EXPECTED
+    int expectedDimensionValue = 3;
+
+    // ACT
+    Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
+
+    // ASSERT
+    SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
+    int actualDimensionValue = newChunkRange.getDimSizes()[0];
+
+    assertEquals(expectedDimensionValue, actualDimensionValue, 
+                "testRecomputeChunksFailure: chunk has not been recalculated due to failure.");
+
+    // TEARDOWN
+    free(p);
+    free(rhs);
 }
 
 void testChunkDimensionsRecalculated() {
     // ARRANGE
     SimulationRange coreRange = SimulationRange(4, 4, 2);
     SimulationRange chunkRange = SimulationRange(3, 4, 2);
-    float maxSimulationAreaMemUsage = 0.00004;
-    int iterations = 1;
+    float maxSimulationAreaMemUsage = 0.00006;
+    int iterations = 3;
     int pSize = coreRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
     float *rhs = (float*)malloc(sizeof(float)*pSize);
@@ -43,7 +71,7 @@ void testChunkDimensionsRecalculated() {
     SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
     int actualDimensionValue = newChunkRange.getDimSizes()[0];
     float * actualSimulationArea = simulation.getSimulationArea().p;
-    float actualValue =  actualSimulationArea[F3D2C(4+2,4+2, 0,0,0,4/2,4/2,2/2)];
+    float actualValue =  actualSimulationArea[F3D2C(4, 4, 0,0,0, 4/2,4/2,2/2)];
 
     assertEquals(expectedDimensionValue, actualDimensionValue, 
                 "testChunkDimensionsRecalculated: new chunk dimensions was re-computed correctly.");
@@ -74,7 +102,7 @@ void testProcessingSimpleCase() {
 
     // ASSERT
     float * actualSimulationArea = simulation.getSimulationArea().p;
-    float actualValue =  actualSimulationArea[F3D2C(4+2,4+2, 0,0,0,4/2,4/2,2/2)];
+    float actualValue =  actualSimulationArea[F3D2C(4, 4, 0,0,0,4/2,4/2,2/2)];
     assertEquals(expectedValue, actualValue, "testProcessingSimpleCase");
 
     // TEARDOWN
@@ -85,6 +113,7 @@ void testProcessingSimpleCase() {
 int main(void) {
     testChunkDimensionsRecalculated();
     testProcessingSimpleCase();
+    testRecomputeChunksFailure();
     
     return 0;
 }
