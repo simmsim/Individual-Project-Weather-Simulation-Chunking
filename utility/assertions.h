@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <cmath>
 
 #if defined(OCLSETUPTEST) 
     #include "../SimulationRange.h"
@@ -29,6 +30,18 @@ void assertEquals(float * expected, float * actual, int coreSize,
 void assertEquals(int expected, int actual, std::string testName) {
     bool succeeded = true;
     if (expected != actual) {
+        std::cout << "Values are different: expected {" << expected << 
+        "} but actual was {" << actual << "}\n";
+        succeeded = false;
+    }
+    printTestResultMessage(succeeded, testName);
+}
+
+void assertEquals(float expected, float actual, std::string testName) {
+    bool succeeded = true;
+    float epsilon = std::max(std::fabs(expected), std::fabs(actual)) * 1e-4;
+    bool isEqual = ((expected - actual) < epsilon) && ((actual - expected) < epsilon);
+    if (!isEqual) {
         std::cout << "Values are different: expected {" << expected << 
         "} but actual was {" << actual << "}\n";
         succeeded = false;
