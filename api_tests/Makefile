@@ -1,6 +1,6 @@
 CPP=g++
-CC=-g -O3 -Wall
-LIBS=-lOpenCL -fopenmp
+CC=-g -std=c++11 -O3 -Wall
+LIBS=-lOpenCL
 
 targets=ChunkingSimulationTest OCLSetupTest SimulationRangeTest
 all: $(targets)
