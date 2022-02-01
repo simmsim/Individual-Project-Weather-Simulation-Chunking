@@ -1,0 +1,17 @@
+Number of runs 5
+Number of iterations 50
+Dimensions ip=64, jp=64, kp=64
+
+Elapsed[ms] 177
+Elapsed[µs] 177645
+Elapsed[ms] 130
+Elapsed[µs] 130332
+Elapsed[ms] 115
+Elapsed[µs] 115383
+Elapsed[ms] 131
+Elapsed[µs] 131879
+Elapsed[ms] 120
+Elapsed[µs] 120111
+
+Average[ms] 134
+Average[µs] 135070
