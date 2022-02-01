@@ -13,11 +13,9 @@ OCLSetup::OCLSetup(int deviceType, char * programFileName,
     }
     SetDeviceProperties();
     if (CreateCommandQueue() != CL_SUCCESS) {
-        std::cout << "is it here queue\n";
         *err = OCLSETUP_FAILURE;
     }
     if (CreateKernelFromProgram(programFileName, kernelName) != CL_SUCCESS) {
-        std::cout << "is it here program\n";
         *err = OCLSETUP_FAILURE;
     }
 }
@@ -76,8 +74,11 @@ int OCLSetup::CreateKernelFromProgram(char * programFileName,
     cl::Program::Sources source(1, std::make_pair(prog.c_str(), prog.length()+1));
     cl::Program kernelProgram(context, source, &errorCode); 
     ErrorHelper::testError(errorCode, "Failed to create the program");
+    std::vector<cl::Device> devices;
+    devices.push_back(device);
     errorCode = kernelProgram.build(device);
     ErrorHelper::testError(errorCode, "Failed to build the program");
+    cl_build_status status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
     program = kernelProgram;
     kernel = cl::Kernel(program, kernelName, &errorCode);
     ErrorHelper::testError(errorCode, "Failed to create the kernel");
