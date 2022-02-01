@@ -1,3 +1,3 @@
-const int im=64;
-const int jm = 64;
-const int km = 64;
+const int ip = 64;
+const int jp = 64;
+const int kp = 64;
