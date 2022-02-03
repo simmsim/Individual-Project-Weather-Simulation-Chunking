@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <math.h>
-#include <omp.h>
 
 #define PERIODIC 1
 #define INFLOW 2
@@ -57,6 +56,8 @@ int Simulation::CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage) {
             << "New chunk size will be determined automatically.\n";
         return ReconfigureChunkSize(maxMem);
     }
+
+    return CHUNK_SUCCESS;
 }
 
 int Simulation::CheckChunkDimensions() {
@@ -67,7 +68,6 @@ int Simulation::CheckChunkDimensions() {
         std::cout << "Core and chunk must have the same dimensions, but provided core dimensions {"
                   << coreDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different."
                   << " Chunking will not proceed. Exiting...\n";
-        // TODO: shouldn't be abruptly exiting the program - perhaps throw exception instead?
         return CHUNK_AND_SIMULATION_DIMENSION_MISMATCH;
     }
 
@@ -78,7 +78,6 @@ int Simulation::CheckChunkDimensions() {
             std::cout << "Provided chunk dimension size {" << chunkDimSizes[i] << "} " <<
             "exceed core dimension size {" << coreDimSizes[i] << "} at index " << i 
             << ". Chunking will not proceed. Exiting...\n"; 
-            // TODO: shouldn't be abruptly exiting the program - perhaps throw exception instead?
             return CHUNK_AND_SIMULATION_DIMENSION_SIZE_MISMATCH;
         }
     }
@@ -123,7 +122,6 @@ void Simulation::ChunkAndCompute() {
     float * p1 = (float*)malloc(sizeof(float)*coreSize);
     std::copy(simulationArea.p, simulationArea.p + coreSize, p1);
 
-
     int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
     int kChunk = simulationArea.chunkDimensions.getDimSizes()[2];
@@ -149,10 +147,11 @@ void Simulation::ChunkAndCompute() {
     cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
+    float *inChunk = (float*)malloc(sizeof(float)*haloChunkSize);
+    float *rhsChunk = (float*)malloc(sizeof(float)*haloChunkSize);
+    float *outChunk = (float*)malloc(sizeof(float)*haloChunkSize);
+
     for (int n = 0; n < simulationArea.iterations; n++) {
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-        //#pragma omp parallel for collapse(3); TODO: need to think more about whether it's possible to parallize in a way
-        // that gives performance gain.
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
             for (int j_start = 0; j_start < jDim; j_start += jChunk) {
                 for (int i_start = 0; i_start < iDim; i_start += iChunk) {
@@ -163,10 +162,6 @@ void Simulation::ChunkAndCompute() {
                         simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
                         haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
                     }
-
-                    float *inChunk = (float*)malloc(sizeof(float)*haloChunkSize);
-                    float *rhsChunk = (float*)malloc(sizeof(float)*haloChunkSize);
-                    float *outChunk = (float*)malloc(sizeof(float)*haloChunkSize);
 
                     // Build a chunk, copy values in from core.
                     for (int k = 0; k < kHalChunk; k++) {
@@ -290,13 +285,6 @@ void Simulation::ChunkAndCompute() {
 
                     errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), outChunk);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
-                    /*
-                    std::cout << "\n After SIMPLE compute\n" << "";
-                    for (int idx = 0; idx < haloChunkSize; idx++) {
-                        std::cout << outChunk[idx] << " ";
-                    }
-                    std::cout << "\n\n" << "";
-                    */
 
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
@@ -317,31 +305,21 @@ void Simulation::ChunkAndCompute() {
                             }
                         }
                     }
-
-                    // Fly away and be free.
-                    free(inChunk);
-                    free(rhsChunk);
-                    free(outChunk);
                 }
             }
         }
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        //std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
-        //std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
-    
         // the output array becomes our problem/input array for next iteration
         float * intermediate = p1;
         p1 = p2;
         p2 = intermediate;
     }
     std::copy(p1, p1 + coreSize, simulationArea.p);
-    /*
-    std::cout << "SimulationArea.p\n";
-    for (int i = 0; i < coreSize; i++) {
-        std::cout << simulationArea.p[i] << " ";
-    }
-    std::cout << "\n";
-    */
+    
+    // Fly away and be free.
+    free(inChunk);
+    free(rhsChunk);
+    free(outChunk);
+
     free(p2);
     free(p1);
 }
@@ -349,5 +327,5 @@ void Simulation::ChunkAndCompute() {
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
     oclSetup.kernel.setArg(6, &type);
     cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
-    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + type);
+    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel for a condition");
 }
