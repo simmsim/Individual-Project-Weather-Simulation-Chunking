@@ -1,0 +1,9 @@
+Number of runs 1
+Number of iterations 50
+Dimensions ip=150, jp=150, kp=90
+
+Elapsed[ms] 1043
+Elapsed[µs] 1043563
+
+Average[ms] 1043
+Average[µs] 1043563
