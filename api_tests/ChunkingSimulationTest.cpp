@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <string>
+#include <chrono>
 
 int deviceType = CPU;
 int halo = 1; // 1-point halo
@@ -11,14 +12,17 @@ char * programFileName = (char*) "../sor_kernel.cl";
 char * kernelName = (char*) "sor_superkernel";
 
 Simulation initializeAndRun(float * p, float * rhs,
-                            SimulationRange coreRange, SimulationRange chunkRange,
-                            float maxSimulationAreaMemUsage, int iterations) {
+                            SimulationRange simulationRange, SimulationRange chunkRange,
+                            float maxSimulationAreaMemUsage, int iterations, bool isSimple=false) {
+    generateDomain(p, rhs, simulationRange);
+    if (isSimple) {
+        std::fill(rhs, rhs+(simulationRange.getSimulationSize()), 1.0);
+    } 
+
     int err;
     Simulation simulation = Simulation(deviceType, programFileName, kernelName, &err);
-    int pSize = coreRange.getSimulationSize();
+    simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, simulationRange, chunkRange);
 
-    generateDomain(p, rhs, coreRange);
-    simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange);   
     return simulation;
 }
 
@@ -86,24 +90,35 @@ void testChunkDimensionsRecalculated() {
 
 void testProcessingSimpleCase() {
     // ARRANGE
-    SimulationRange coreRange = SimulationRange(4, 4, 2);
-    SimulationRange chunkRange = SimulationRange(2, 4, 2);
-    int iterations = 3;
+    SimulationRange simulationRange = SimulationRange(6, 6, 4);
+    SimulationRange chunkRange = SimulationRange(4, 4, 2);
+    int iterations = 2;
     float maxSimulationAreaMemUsage = 95;
-    int pSize = coreRange.getSimulationSize();
+    int pSize = simulationRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
     float *rhs = (float*)malloc(sizeof(float)*pSize);
 
-    // EXPECTED
-    float expectedValue = -0.0768519;
-
     // ACT
-    Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
-
+    Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, maxSimulationAreaMemUsage, iterations, true);
+    
     // ASSERT
     float * actualSimulationArea = simulation.getSimulationArea().p;
-    float actualValue =  actualSimulationArea[F3D2C(4, 4, 0,0,0,4/2,4/2,2/2)];
+
+    for (int idx = 0; idx < pSize; idx++) {
+        std::cout << actualSimulationArea[idx]<< " ";
+    }
+    std::cout << "\n\n";
+    
+    /*
+    float index = F3D2C(6, 6, 0,0,0, 1, 1, 0);
+    std::cout << "index is " << index << "\n";
+    float actualValue =  p[F3D2C(6, 6, 0,0,0, 1, 1, 0)];
+    std::cout << "actual value is " << actualValue << "\n";
+    */
+
+    /*
     assertEquals(expectedValue, actualValue, "testProcessingSimpleCase");
+    */
 
     // TEARDOWN
     free(p);
@@ -111,9 +126,9 @@ void testProcessingSimpleCase() {
 }
 
 int main(void) {
-    testChunkDimensionsRecalculated();
+    //testChunkDimensionsRecalculated();
     testProcessingSimpleCase();
-    testRecomputeChunksFailure();
+    //testRecomputeChunksFailure();
     
     return 0;
 }
