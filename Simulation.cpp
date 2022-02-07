@@ -19,10 +19,10 @@ Simulation::Simulation(int deviceType, char * programFileName,
 int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
                                int halo, int iterations,
                                float maxSimulationAreaMemUsage,
-                               SimulationRange coreDimensions, 
+                               SimulationRange simulationDimensions, 
                                SimulationRange chunkDimensions = SimulationRange()) {
     int errorCode;
-    InitializeSimulationArea(p, rhs, halo, iterations, coreDimensions, chunkDimensions);
+    InitializeSimulationArea(p, rhs, halo, iterations, simulationDimensions, chunkDimensions);
     errorCode = CheckChunkDimensions();
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
@@ -31,20 +31,19 @@ int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
     }
-    ChunkAndCompute();
+    ProcessSimulation();
 }
 
 void Simulation::InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
-                                          SimulationRange coreDimensions, SimulationRange chunkDimensions) {
+                                          SimulationRange simulationDimensions, SimulationRange chunkDimensions) {
     simulationArea.p = p;
     simulationArea.rhs = rhs;
     simulationArea.halo = halo;
     simulationArea.iterations = iterations;
-    simulationArea.coreDimensions = coreDimensions;
-    simulationArea.chunkDimensions = (chunkDimensions.getDimensions() == 0) ? SimulationRange(coreDimensions) : chunkDimensions;
+    simulationArea.simulationDimensions = simulationDimensions;
+    simulationArea.chunkDimensions = (chunkDimensions.getDimensions() == 0) ? SimulationRange(simulationDimensions) : chunkDimensions;
     simulationArea.halChunkDimensions = SimulationRange(chunkDimensions);
     simulationArea.halChunkDimensions.incrementDimensionsBy(halo*2);
-    
 }
 
 int Simulation::CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage) {
@@ -61,22 +60,22 @@ int Simulation::CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage) {
 }
 
 int Simulation::CheckChunkDimensions() {
-    int coreDimensions = simulationArea.coreDimensions.getDimensions();
+    int simulationDimensions = simulationArea.simulationDimensions.getDimensions();
     int chunkDimensions = simulationArea.chunkDimensions.getDimensions();
 
-    if (coreDimensions != chunkDimensions) {
-        std::cout << "Core and chunk must have the same dimensions, but provided core dimensions {"
-                  << coreDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different."
+    if (simulationDimensions != chunkDimensions) {
+        std::cout << "Simulation and chunk must have the same dimensions, but provided simulation dimensions {"
+                  << simulationDimensions << "} and chunk dimensions {" << chunkDimensions << "} are different."
                   << " Chunking will not proceed. Exiting...\n";
         return CHUNK_AND_SIMULATION_DIMENSION_MISMATCH;
     }
 
-    int * coreDimSizes = simulationArea.coreDimensions.getDimSizes();
-    int * chunkDimSizes = simulationArea.chunkDimensions.getDimSizes();
-    for (int i = 0; i < coreDimensions; i++) {
-        if (chunkDimSizes[i] > coreDimSizes[i]) {
-            std::cout << "Provided chunk dimension size {" << chunkDimSizes[i] << "} " <<
-            "exceed core dimension size {" << coreDimSizes[i] << "} at index " << i 
+    int * coreDimSizes = simulationArea.simulationDimensions.getDimSizes();
+    int * halChunkDimSizes = simulationArea.halChunkDimensions.getDimSizes();
+    for (int i = 0; i < simulationDimensions; i++) {
+        if (halChunkDimSizes[i] > coreDimSizes[i]) {
+            std::cout << "Halloed chunk dimension size {" << halChunkDimSizes[i] << "} " <<
+            "exceed simulation dimension size {" << coreDimSizes[i] << "} at index " << i 
             << ". Chunking will not proceed. Exiting...\n"; 
             return CHUNK_AND_SIMULATION_DIMENSION_SIZE_MISMATCH;
         }
@@ -88,7 +87,7 @@ int Simulation::CheckChunkDimensions() {
 int Simulation::ReconfigureChunkSize(long maxMem) {
     long bytesRequiredForHalloedChunks;
     int iDimHalSize;
-    if (simulationArea.coreDimensions.getDimensions() > 1) {
+    if (simulationArea.simulationDimensions.getDimensions() > 1) {
         int jDimHalSize = simulationArea.halChunkDimensions.getDimSizes()[1];
         int kDimHalSize = simulationArea.halChunkDimensions.getDimSizes()[2];
         bytesRequiredForHalloedChunks = jDimHalSize*kDimHalSize*sizeof(float)*ARR_BLOCKS;
@@ -110,12 +109,89 @@ int Simulation::ReconfigureChunkSize(long maxMem) {
     return CHUNK_SUCCESS;
 }
 
-void Simulation::ChunkAndCompute() {
-    int iDim = simulationArea.coreDimensions.getDimSizes()[0];
-    int jDim = simulationArea.coreDimensions.getDimSizes()[1];
-    int kDim = simulationArea.coreDimensions.getDimSizes()[2];
+void Simulation::ProcessSimulation() {
+    if (simulationArea.halChunkDimensions.getSimulationSize() == simulationArea.simulationDimensions.getSimulationSize()) {
+        ComputeFullSimulation();
+        std::cout << "Compute full simulation\n";
+    } else {
+        std::cout << "in chunk nooooooooo!!!!!!!\n";
+        //ChunkAndCompute();
+    }
+}
 
-    size_t coreSize = simulationArea.coreDimensions.getSimulationSize();
+void Simulation::ComputeFullSimulation() {
+    int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
+    int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
+    int kChunk = simulationArea.chunkDimensions.getDimSizes()[2];
+
+    size_t simulationSize = simulationArea.simulationDimensions.getSimulationSize();
+
+    cl_int err;
+    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE, simulationSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create an in buffer"); 
+    cl::Buffer rhsBuffer(oclSetup.context, CL_MEM_READ_WRITE, simulationSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create an rhs buffer");                    
+    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, simulationSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create an out buffer");
+
+    cl_int errorCode;
+    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p);
+    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
+    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs);
+    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
+
+    oclSetup.kernel.setArg(2, rhsBuffer);
+    oclSetup.kernel.setArg(3, iChunk);
+    oclSetup.kernel.setArg(4, jChunk);
+    oclSetup.kernel.setArg(5, kChunk);
+
+    cl::Buffer finalResultBuffer;
+    for (int iter = 1; iter <= simulationArea.iterations; iter += 1) {
+        if (iter % 2 == 0) {
+            CallKernel(out_p, in_p);
+            finalResultBuffer = in_p;
+        } else {
+            CallKernel(in_p, out_p);
+            finalResultBuffer = out_p;
+        }     
+
+    }
+
+    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p);
+    ErrorHelper::testError(errorCode, "Failed to read back from the device");
+}
+
+void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
+    int iHalChunk = simulationArea.halChunkDimensions.getDimSizes()[0];
+    int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
+    int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
+
+    int coreArea = simulationArea.chunkDimensions.getSimulationSize();
+
+    oclSetup.kernel.setArg(0, in_p);
+    oclSetup.kernel.setArg(1, out_p);
+    
+    EnqueueKernel(INFLOW, cl::NDRange(1*jHalChunk*kHalChunk));                
+    EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));               
+    EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));                
+    EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
+
+    cl::Event event;
+    int coreState = CORE;
+    oclSetup.kernel.setArg(6, &coreState);
+    cl_int errorCode;
+    errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(coreArea),
+        cl::NullRange, nullptr, &event);
+    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
+    event.wait();
+}
+
+void Simulation::ChunkAndCompute() {
+    int iDim = simulationArea.simulationDimensions.getDimSizes()[0];
+    int jDim = simulationArea.simulationDimensions.getDimSizes()[1];
+    int kDim = simulationArea.simulationDimensions.getDimSizes()[2];
+
+    size_t coreSize = simulationArea.simulationDimensions.getSimulationSize();
     float *p2 = (float*)malloc(sizeof(float)*coreSize);
     // float * p1 = simulationArea.p;
     // Didn't work properly when program was set with just pointing to simulationArea. TODO: check later if it can be fixed.
@@ -325,7 +401,9 @@ void Simulation::ChunkAndCompute() {
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
+    cl::Event event;
     oclSetup.kernel.setArg(6, &type);
-    cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
+    cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr, &event);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel for a condition");
+    event.wait();
 }

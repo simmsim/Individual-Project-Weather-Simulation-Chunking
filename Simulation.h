@@ -9,7 +9,7 @@ typedef struct simulationAreaStruct {
     cl_float *rhs;
     int halo;
     int iterations;
-    SimulationRange coreDimensions;
+    SimulationRange simulationDimensions;
     SimulationRange chunkDimensions;
     SimulationRange halChunkDimensions;
 } simulationAreaStruct;
@@ -19,12 +19,16 @@ class Simulation {
         OCLSetup oclSetup;
         simulationAreaStruct simulationArea;
 
+        // Simulation dimensions are core + halo; chunk dimensions specify how to chunk core area (without halo)
         void InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
-                                      SimulationRange coreDimensions, SimulationRange chunkDimensions);
+                                      SimulationRange simulationDimensions, SimulationRange chunkDimensions);
         int CheckChunkDimensions();
         int CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
         int ReconfigureChunkSize(long maxMem);
+        void ProcessSimulation();
+        void ComputeFullSimulation();
         void ChunkAndCompute();
+        void CallKernel(cl::Buffer in_p, cl::Buffer out_p);
         void EnqueueKernel(int type, cl::NDRange range);
 
     public:        
@@ -33,7 +37,7 @@ class Simulation {
 
         int RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
                            float maxSimulationAreaMemUsage,
-                           SimulationRange coreDimensions,
+                           SimulationRange simulationDimensions,
                            SimulationRange chunkDimensions);
 
         const simulationAreaStruct & getSimulationArea() const {
