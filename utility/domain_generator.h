@@ -11,9 +11,8 @@ void generateDomain(float * p0, float * rhs, SimulationRange simulationRange) {
     for (int i = 0;i < iDim;i += 1) {
         for (int j = 0;j < jDim;j += 1) {
             for (int k = 0;k < kDim;k += 1) {
-                rhs[F3D2C(iDim,jDim,0,0,0,i,j,k)] = 0.1+((i+1)*(j+1)*(k+1))/((iDim)*(jDim)*(kDim));
-                p0[F3D2C(iDim,jDim,0,0,0,i,j,k)] = ((i+1)*(j+1)*(k+1))/((iDim)*(jDim)*(kDim));
-                // p0[F3D2C(im+2,jDim+2,0,0,0,i,j,k)] = 1.0;
+                rhs[F3D2C(iDim,jDim,0,0,0,i,j,k)] = 0.1+((float)(i+1)*(j+1)*(k+1))/((float)(iDim)*(jDim)*(kDim));
+                p0[F3D2C(iDim,jDim,0,0,0,i,j,k)] = ((float)(i+1)*(j+1)*(k+1))/((float)(iDim)*(jDim)*(kDim));
             }
         }
     }
