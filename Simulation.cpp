@@ -113,12 +113,15 @@ int Simulation::ReconfigureChunkSize(long maxMem) {
 }
 
 void Simulation::ProcessSimulation() {
-    if (simulationArea.halChunkDimensions.getSimulationSize() == simulationArea.simulationDimensions.getSimulationSize()) {
-        ComputeFullSimulation();
+    if (IsSimulationChunked()) {
+        ChunkAndCompute();
     } else {
-        std::cout << "in chunk nooooooooo!!!!!!!\n";
-        //ChunkAndCompute();
+        ComputeFullSimulation();
     }
+}
+
+bool Simulation::IsSimulationChunked() {
+    return simulationArea.halChunkDimensions.getSimulationSize() != simulationArea.simulationDimensions.getSimulationSize();
 }
 
 void Simulation::ComputeFullSimulation() {

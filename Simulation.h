@@ -37,6 +37,7 @@ class Simulation {
         int CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
         int ReconfigureChunkSize(long maxMem);
         void ProcessSimulation();
+        bool IsSimulationChunked();
         void ComputeFullSimulation();
         void ChunkAndCompute();
         void CallKernel(cl::Buffer in_p, cl::Buffer out_p);
