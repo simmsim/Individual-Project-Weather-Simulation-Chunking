@@ -41,7 +41,9 @@ int main(int argc, char* argv[]) {
 
     print_to_file(beginWithSetup, end, fileName, "ElapsedOCL");
     print_to_file(beginSimulationOnly, end, fileName, "ElapsedSimulationOnly");
+    print_average_to_file(simulation.getPerformanceMeasurements().clKernelExecution, fileName, "Core kernel execution");
 
+    free(fileName);
     free(p);
     free(rhs);
 }

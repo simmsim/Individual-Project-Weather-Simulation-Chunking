@@ -100,8 +100,6 @@ int main(int argc, char* argv[]) {
     strcpy(fileName, argv[1]);
 
     print_to_file(begin, end, fileName);
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
-    std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds> (end - begin).count() << "[µs]" << std::endl;
     // std::cout << p0[F3D2C(ip+2,jp+2, 0,0,0,ip/2,jp/2,kp/2)] << "\n";
 
     free(fileName);

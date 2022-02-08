@@ -1,3 +1,3 @@
-const int ip = 64;
-const int jp = 64;
-const int kp = 64;
+const int ip = 200;
+const int jp = 200;
+const int kp = 90;
