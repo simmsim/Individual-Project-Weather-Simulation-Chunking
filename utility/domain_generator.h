@@ -17,3 +17,12 @@ void generateDomain(float * p0, float * rhs, SimulationRange simulationRange) {
         }
     }
 }
+
+void generateSimpleDomain(float * p0, float * rhs, SimulationRange simulationRange) {
+    int simulationSize = simulationRange.getSimulationSize();
+    
+    for (int idx = 0; idx < simulationSize; idx++) {
+        p0[idx] = idx + 1;
+        rhs[idx] = 1;
+    }
+}
