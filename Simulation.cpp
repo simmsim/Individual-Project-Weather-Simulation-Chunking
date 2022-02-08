@@ -10,6 +10,7 @@
 #define CORE 5
 
 #define ARR_BLOCKS 3
+#define PROFILING_ENABLED 1
 
 Simulation::Simulation(int deviceType, char * programFileName,
                        char * kernelName, int * err) {
@@ -32,6 +33,8 @@ int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
         return errorCode;
     }
     ProcessSimulation();
+    // for now return success
+    return CHUNK_SUCCESS;
 }
 
 void Simulation::InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
@@ -112,7 +115,6 @@ int Simulation::ReconfigureChunkSize(long maxMem) {
 void Simulation::ProcessSimulation() {
     if (simulationArea.halChunkDimensions.getSimulationSize() == simulationArea.simulationDimensions.getSimulationSize()) {
         ComputeFullSimulation();
-        std::cout << "Compute full simulation\n";
     } else {
         std::cout << "in chunk nooooooooo!!!!!!!\n";
         //ChunkAndCompute();
@@ -127,11 +129,11 @@ void Simulation::ComputeFullSimulation() {
     size_t simulationSize = simulationArea.simulationDimensions.getSimulationSize();
 
     cl_int err;
-    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE, simulationSize * sizeof(float), nullptr, &err);
+    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an in buffer"); 
-    cl::Buffer rhsBuffer(oclSetup.context, CL_MEM_READ_WRITE, simulationSize * sizeof(float), nullptr, &err);
+    cl::Buffer rhsBuffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an rhs buffer");                    
-    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, simulationSize * sizeof(float), nullptr, &err);
+    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
     cl_int errorCode;
@@ -139,7 +141,7 @@ void Simulation::ComputeFullSimulation() {
     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
     errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs);
     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
-
+   
     oclSetup.kernel.setArg(2, rhsBuffer);
     oclSetup.kernel.setArg(3, iChunk);
     oclSetup.kernel.setArg(4, jChunk);
@@ -156,9 +158,20 @@ void Simulation::ComputeFullSimulation() {
         }     
 
     }
-
-    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p);
+    cl::Event event;
+    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &event);
     ErrorHelper::testError(errorCode, "Failed to read back from the device");
+    event.wait();
+    if (PROFILING_ENABLED == 1) {
+        cl_ulong ev_start_time=(cl_ulong)0;
+        cl_ulong ev_end_time=(cl_ulong)0;
+        size_t return_bytes;
+
+        clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_QUEUED,sizeof(cl_ulong),&ev_start_time, &return_bytes);
+        clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &ev_end_time, &return_bytes);
+        double run_time =(double)(ev_end_time - ev_start_time);
+        printf("Reading back data %f secs\n",run_time*1.0e-9);
+    }
 }
 
 void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
@@ -175,7 +188,8 @@ void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
     EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));               
     EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));                
     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
-
+    //EnqueueKernel(CORE, cl::NDRange(coreArea));
+    
     cl::Event event;
     int coreState = CORE;
     oclSetup.kernel.setArg(6, &coreState);
@@ -183,7 +197,23 @@ void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(coreArea),
         cl::NullRange, nullptr, &event);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
+    // clFinish(oclSetup.commandQueue.get());
     event.wait();
+
+    if (PROFILING_ENABLED == 1) {
+        MeasureEventPerformance(event, performanceMeasurements.clKernelExecution);
+    }
+}
+
+void Simulation::MeasureEventPerformance(cl::Event event, std::vector<double>& measurementsVec) {
+    cl_ulong ev_start_time=(cl_ulong)0;
+    cl_ulong ev_end_time=(cl_ulong)0;
+    size_t return_bytes;
+
+    clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_QUEUED,sizeof(cl_ulong),&ev_start_time, &return_bytes);
+    clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &ev_end_time, &return_bytes);
+    double run_time =(double)(ev_end_time - ev_start_time);
+    measurementsVec.push_back(run_time);
 }
 
 void Simulation::ChunkAndCompute() {

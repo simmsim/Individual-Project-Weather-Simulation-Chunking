@@ -3,8 +3,9 @@
 #include "ErrorCodes.h"
 
 #include <CL/opencl.hpp>
+#include <vector>
 
-typedef struct simulationAreaStruct {
+typedef struct SimulationAreaStruct {
     cl_float *p;
     cl_float *rhs;
     int halo;
@@ -12,12 +13,22 @@ typedef struct simulationAreaStruct {
     SimulationRange simulationDimensions;
     SimulationRange chunkDimensions;
     SimulationRange halChunkDimensions;
-} simulationAreaStruct;
+} SimulationAreaStruct;
+
+typedef struct PerformanceMeasurementsStruct {
+    std::vector<double> clWriteToDevice;
+    std::vector<double> clKernelExecution;
+    std::vector<double> clReadFromDevice;
+
+    std::vector<long> constructChunk;
+    std::vector<long> reintegrateChunk;
+} PerformanceMeasurementsStruct;
 
 class Simulation {
     private:
         OCLSetup oclSetup;
-        simulationAreaStruct simulationArea;
+        SimulationAreaStruct simulationArea;
+        PerformanceMeasurementsStruct performanceMeasurements;
 
         // Simulation dimensions are core + halo; chunk dimensions specify how to chunk core area (without halo)
         void InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
@@ -31,6 +42,8 @@ class Simulation {
         void CallKernel(cl::Buffer in_p, cl::Buffer out_p);
         void EnqueueKernel(int type, cl::NDRange range);
 
+        void MeasureEventPerformance(cl::Event event, std::vector<double>& measurementVec);
+
     public:        
         Simulation(int deviceType, char * programFileName,
                     char * kernelName, int * err);
@@ -40,7 +53,11 @@ class Simulation {
                            SimulationRange simulationDimensions,
                            SimulationRange chunkDimensions);
 
-        const simulationAreaStruct & getSimulationArea() const {
+        const SimulationAreaStruct & getSimulationArea() const {
             return simulationArea;
+        }
+
+        const PerformanceMeasurementsStruct & getPerformanceMeasurements() const {
+            return performanceMeasurements;
         }
 };
