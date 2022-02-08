@@ -12,6 +12,12 @@
 #define ARR_BLOCKS 3
 #define PROFILING_ENABLED 1
 
+#if defined(MEASURE_EVENT_PERFORMANCE) 
+    #define PROFILING_ENABLED 1
+#else
+    #define PROFILING_ENABLED 0
+#endif
+
 Simulation::Simulation(int deviceType, char * programFileName,
                        char * kernelName, int * err) {
     oclSetup = OCLSetup(deviceType, programFileName, kernelName, err);
@@ -128,7 +134,6 @@ void Simulation::ComputeFullSimulation() {
     int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
     int kChunk = simulationArea.chunkDimensions.getDimSizes()[2];
-
     size_t simulationSize = simulationArea.simulationDimensions.getSimulationSize();
 
     cl_int err;
@@ -139,11 +144,22 @@ void Simulation::ComputeFullSimulation() {
     cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
+    cl::Event eventWriteSimulation;
     cl_int errorCode;
-    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p);
-    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
-    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs);
-    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
+    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &eventWriteSimulation);
+    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for simulation p.");
+    if (PROFILING_ENABLED == 1) {
+        eventWriteSimulation.wait();
+        MeasureEventPerformance(eventWriteSimulation, performanceMeasurements.clWriteToDevice);
+    }
+
+    cl::Event eventWriteRhs;
+    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &eventWriteRhs);
+    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhs.");
+    if (PROFILING_ENABLED == 1) {
+        eventWriteRhs.wait();
+        MeasureEventPerformance(eventWriteRhs, performanceMeasurements.clWriteToDevice);
+    }
    
     oclSetup.kernel.setArg(2, rhsBuffer);
     oclSetup.kernel.setArg(3, iChunk);
@@ -159,21 +175,14 @@ void Simulation::ComputeFullSimulation() {
             CallKernel(in_p, out_p);
             finalResultBuffer = out_p;
         }     
-
     }
-    cl::Event event;
-    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &event);
-    ErrorHelper::testError(errorCode, "Failed to read back from the device");
-    event.wait();
-    if (PROFILING_ENABLED == 1) {
-        cl_ulong ev_start_time=(cl_ulong)0;
-        cl_ulong ev_end_time=(cl_ulong)0;
-        size_t return_bytes;
 
-        clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_QUEUED,sizeof(cl_ulong),&ev_start_time, &return_bytes);
-        clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &ev_end_time, &return_bytes);
-        double run_time =(double)(ev_end_time - ev_start_time);
-        printf("Reading back data %f secs\n",run_time*1.0e-9);
+    cl::Event readEvent;
+    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &readEvent);
+    ErrorHelper::testError(errorCode, "Failed to read back from the device");
+    if (PROFILING_ENABLED == 1) {
+        readEvent.wait();
+        MeasureEventPerformance(readEvent, performanceMeasurements.clReadFromDevice);
     }
 }
 
@@ -191,7 +200,6 @@ void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
     EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));               
     EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));                
     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
-    //EnqueueKernel(CORE, cl::NDRange(coreArea));
     
     cl::Event event;
     int coreState = CORE;
@@ -220,9 +228,13 @@ void Simulation::MeasureEventPerformance(cl::Event event, std::vector<double>& m
 }
 
 void Simulation::ChunkAndCompute() {
-    int iDim = simulationArea.simulationDimensions.getDimSizes()[0];
-    int jDim = simulationArea.simulationDimensions.getDimSizes()[1];
-    int kDim = simulationArea.simulationDimensions.getDimSizes()[2];
+    int iSimDim = simulationArea.simulationDimensions.getDimSizes()[0];
+    int jSimDim = simulationArea.simulationDimensions.getDimSizes()[1];
+    int kSimDim = simulationArea.simulationDimensions.getDimSizes()[2];
+
+    int iDim = simulationArea.simulationDimensions.getDimSizes()[0] - 2;
+    int jDim = simulationArea.simulationDimensions.getDimSizes()[1] - 2;
+    int kDim = simulationArea.simulationDimensions.getDimSizes()[2] - 2;
 
     size_t coreSize = simulationArea.simulationDimensions.getSimulationSize();
     float *p2 = (float*)malloc(sizeof(float)*coreSize);
@@ -246,7 +258,7 @@ void Simulation::ChunkAndCompute() {
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
 
-    size_t haloChunkSize =simulationArea.halChunkDimensions.getSimulationSize();
+    size_t haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
 
     cl_int err;
     cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
@@ -281,12 +293,6 @@ void Simulation::ChunkAndCompute() {
                         }
 
                         for (int j = 0; j < jHalChunk; j++) {
-                            if (((j_start == 0 && j == 0) ||
-                                (j_start + jChunk == jDim && j + 1 == jHalChunk)) && jDim > 1) {
-                                // This is halo for sides; leave as zeros.
-                                continue;
-                            }
-
                             // TODO: done for 1-point halo: could be more general; future work.
                             // Calculation for offsets are done based on the assumption that we're chunking jChunk = jDim. 
                             if (kDim == 1 && jDim == 1) {
@@ -320,32 +326,12 @@ void Simulation::ChunkAndCompute() {
                                 std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx); 
                                 std::copy(simulationArea.rhs + offset, simulationArea.rhs + inputEndOffset, rhsChunk + chunkIdx);   
                             } else {
-                                int offset = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim - 1;
-                                int chunkIdx = j*iHalChunk + k*iHalChunk*jHalChunk;
-                                int inputEndOffset = offset + currentIChunk + 2;
-
-                                if (i_start == 0) {
-                                   chunkIdx += 1; 
-                                   offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + k*iDim*jDim + (k_start-1)*iDim*jDim;
-                                   inputEndOffset = offset + currentIChunk + 1;
-                                }
-
-                                if (k_start == 0) {
-                                    offset = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iDim*jDim - 1;
-                                    inputEndOffset = offset + currentIChunk + 2;
-                                }
-
-                                if (k_start == 0 && i_start == 0) {
-                                    offset = (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iDim*jDim;
-                                    inputEndOffset = offset + currentIChunk + 1;
-                                }
-
-                                if (iChunk == iDim || i_start + iChunk >= iDim) { 
-                                    inputEndOffset -= 1;
-                                }
-
-                                std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx);   
-                                std::copy(simulationArea.rhs + offset, simulationArea.rhs + inputEndOffset, rhsChunk + chunkIdx);                       
+                                int offsetStart = k*iSimDim*jSimDim + j*iSimDim + i_start;
+                                int offsetEnd = offsetStart + iHalChunk;
+                                int chunkIndex = k*iHalChunk*jHalChunk + j*iHalChunk;
+                                
+                                std::copy(p1 + offsetStart, p1 + offsetEnd, inChunk + chunkIndex);   
+                                std::copy(simulationArea.rhs + offsetStart, simulationArea.rhs + offsetEnd, rhsChunk + chunkIndex);                       
                             }
                         }
                     }
@@ -408,9 +394,10 @@ void Simulation::ChunkAndCompute() {
                     } else {
                         for (int k = 1; k < kHalChunk - 1; k++) {
                             for (int j = 1; j < jHalChunk - 1; j++) {
-                                int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
-                                int arrayEnd = i_start + (j-1)*iChunk*noOfFullChunks + (j-1)*leftoverIChunk + (k-1)*iChunk*jChunk*noOfFullChunks + (k-1)*leftoverIChunk*jChunk;
-                                std::copy(outChunk + chunkIdx, outChunk + chunkIdx + currentIChunk, p2+arrayEnd);
+                                int offsetStart = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
+                                int offsetEnd = offsetStart + iChunk;
+                                int simulationIndex = k*iSimDim*jSimDim + j*iSimDim + i_start + 1;
+                                std::copy(outChunk + offsetStart, outChunk + offsetEnd, p2 + simulationIndex);
                             }
                         }
                     }

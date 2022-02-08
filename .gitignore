@@ -12,3 +12,6 @@ SimulationRangeTest
 
 SORMain
 SOR_Simple_Baseline
+
+performance_testing/api_version/apiVersion*
+performance_testing/simple_baseline/simple*
