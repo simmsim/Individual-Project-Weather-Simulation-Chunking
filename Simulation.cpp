@@ -25,7 +25,6 @@ Simulation::Simulation(int deviceType, char * programFileName,
 
 int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
                                int halo, int iterations,
-                               float maxSimulationAreaMemUsage,
                                SimulationRange simulationDimensions, 
                                SimulationRange chunkDimensions = SimulationRange()) {
     int errorCode;
@@ -34,7 +33,7 @@ int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
     }
-    errorCode = CheckSpecifiedChunkSize(maxSimulationAreaMemUsage);
+    errorCode = CheckSpecifiedChunkSize();
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
     }
@@ -55,15 +54,18 @@ void Simulation::InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo
     simulationArea.halChunkDimensions.incrementDimensionsBy(halo*2);
 }
 
-int Simulation::CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage) {
-    long maxMem = (oclSetup.deviceProperties.maxMemAllocSize * maxSimulationAreaMemUsage)/100;
-    long requiredMem = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(float) * ARR_BLOCKS;
-    if (requiredMem > maxMem) {
-        std::cout << "Required memory for processing a chunk {" << requiredMem 
-            << "} exceeds device's memory max allocation size {" << maxMem << "}. "
-            << "New chunk size will be determined automatically.\n";
-        return ReconfigureChunkSize(maxMem);
-    }
+int Simulation::CheckSpecifiedChunkSize() {
+    long halChunkBlockRequiredMem = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(float);
+    long totalRequiredMem = halChunkBlockRequiredMem * ARR_BLOCKS;
+    long allowedSingleBufferMem = oclSetup.deviceProperties.maxMemAllocSize;
+    if (halChunkBlockRequiredMem > allowedSingleBufferMem 
+        || totalRequiredMem > oclSetup.deviceProperties.maxGlobalMemSize) {
+            std::cout << "Required memory for processing exceeds device limits" << "\n";
+            std::cout << "Required memory for 1 out of" << ARR_BLOCKS << " chunk data blocks: {" << halChunkBlockRequiredMem 
+             << "} exceeds device's memory max buffer allocation size {" << allowedSingleBufferMem << "}. "
+             << "New chunk size will be determined automatically.\n";
+         return ReconfigureChunkSize(allowedSingleBufferMem);
+        }
 
     return CHUNK_SUCCESS;
 }
@@ -94,17 +96,19 @@ int Simulation::CheckChunkDimensions() {
 }
 
 int Simulation::ReconfigureChunkSize(long maxMem) {
-    long bytesRequiredForHalloedChunks;
+    // Not checking whether three data blocks for chunk (p0,p1,rhs) exceed global mem for now,
+    // it seems that max mem for buffer is 1/4th of global mem anyways! Not urgent, can update later.
+    long bytesRequiredForHalChunkDataBlock;
     int iDimHalSize;
     if (simulationArea.simulationDimensions.getDimensions() > 1) {
         int jDimHalSize = simulationArea.halChunkDimensions.getDimSizes()[1];
         int kDimHalSize = simulationArea.halChunkDimensions.getDimSizes()[2];
-        bytesRequiredForHalloedChunks = jDimHalSize*kDimHalSize*sizeof(float)*ARR_BLOCKS;
+        bytesRequiredForHalChunkDataBlock = jDimHalSize*kDimHalSize*sizeof(float);
     } else {
-        bytesRequiredForHalloedChunks = sizeof(float)*ARR_BLOCKS;
+        bytesRequiredForHalChunkDataBlock = sizeof(float);
     }
 
-    iDimHalSize = (int)floor((float)maxMem/(float)bytesRequiredForHalloedChunks);
+    iDimHalSize = (int)floor((float)maxMem/(float)bytesRequiredForHalChunkDataBlock);
     int iDimChunkSize = iDimHalSize-simulationArea.halo*2;
     if (iDimChunkSize < 1) {
         std::cout << "Unable to determine an appropriate chunk size. Terminating.\n";

@@ -34,7 +34,7 @@ class Simulation {
         void InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
                                       SimulationRange simulationDimensions, SimulationRange chunkDimensions);
         int CheckChunkDimensions();
-        int CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
+        int CheckSpecifiedChunkSize();
         int ReconfigureChunkSize(long maxMem);
         void ProcessSimulation();
         bool IsSimulationChunked();
@@ -50,7 +50,6 @@ class Simulation {
                     char * kernelName, int * err);
 
         int RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
-                           float maxSimulationAreaMemUsage,
                            SimulationRange simulationDimensions,
                            SimulationRange chunkDimensions);
 
