@@ -13,89 +13,26 @@ char * kernelName = (char*) "sor_superkernel";
 
 Simulation initializeAndRun(float * p, float * rhs,
                             SimulationRange simulationRange, SimulationRange chunkRange,
-                            float maxSimulationAreaMemUsage, int iterations) {
+                            int iterations) {
     generateDomain(p, rhs, simulationRange);
 
     int err;
     Simulation simulation = Simulation(deviceType, programFileName, kernelName, &err);
-    simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, simulationRange, chunkRange);
+    simulation.RunSimulation(p, rhs, halo, iterations, simulationRange, chunkRange);
 
     return simulation;
-}
-
-void testRecomputeChunksFailure() {
-    // ARRANGE
-    SimulationRange coreRange = SimulationRange(4, 4, 2);
-    SimulationRange chunkRange = SimulationRange(3, 4, 2);
-    float maxSimulationAreaMemUsage = 0.00004;
-    int iterations = 1;
-    int pSize = coreRange.getSimulationSize();
-    float *p = (float*)malloc(sizeof(float)*pSize);
-    float *rhs = (float*)malloc(sizeof(float)*pSize);
-
-    // EXPECTED
-    int expectedDimensionValue = 3;
-
-    // ACT
-    Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
-
-    // ASSERT
-    SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
-    int actualDimensionValue = newChunkRange.getDimSizes()[0];
-
-    assertEquals(expectedDimensionValue, actualDimensionValue, 
-                "testRecomputeChunksFailure: chunk has not been recalculated due to failure.");
-
-    // TEARDOWN
-    free(p);
-    free(rhs);
-}
-
-void testChunkDimensionsRecalculated() {
-    // ARRANGE
-    SimulationRange coreRange = SimulationRange(6, 6, 4);
-    SimulationRange chunkRange = SimulationRange(3, 4, 2);
-    float maxSimulationAreaMemUsage = 0.00006;
-    int iterations = 3;
-    int pSize = coreRange.getSimulationSize();
-    float *p = (float*)malloc(sizeof(float)*pSize);
-    float *rhs = (float*)malloc(sizeof(float)*pSize);
-
-    // EXPECTED
-    int expectedDimensionValue = 2;
-    float expectedValue = -0.057626;
-
-    // ACT
-    Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
-
-    // ASSERT
-    SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
-    int actualDimensionValue = newChunkRange.getDimSizes()[0];
-    float * actualSimulationArea = simulation.getSimulationArea().p;
-    float actualValue =  actualSimulationArea[F3D2C(6, 6, 0,0,0, 1, 1, 1)];
-
-    assertEquals(expectedDimensionValue, actualDimensionValue, 
-                "testChunkDimensionsRecalculated: new chunk dimensions was re-computed correctly.");
-
-    assertEquals(expectedValue, actualValue, 
-                "testChunkDimensionsRecalculated: simulation area has been computed correctly.");
-
-    // TEARDOWN
-    free(p);
-    free(rhs);
 }
 
 void testChunkingSetup(SimulationRange chunkRange, std::string testName) {
     // ARRANGE
     SimulationRange simulationRange = SimulationRange(152, 152, 92);
     int iterations = 5;
-    float maxSimulationAreaMemUsage = 99;
     int pSize = simulationRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
     float *rhs = (float*)malloc(sizeof(float)*pSize);
 
     // ACT
-    Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, maxSimulationAreaMemUsage, iterations);
+    Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, iterations);
 
     // EXPECTED
     float expectedTopLeftValue = -0.166636;
@@ -133,8 +70,6 @@ int main(void) {
     testProcessingFullSimulationWithoutChunking();
     testProcessingSimulationInEqualChunks();
     testProcessingSimulationWithLeftoverChunk();
-    testChunkDimensionsRecalculated();
-    testRecomputeChunksFailure();
     
     return 0;
 }
