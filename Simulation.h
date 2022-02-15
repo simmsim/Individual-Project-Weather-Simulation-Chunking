@@ -34,7 +34,7 @@ class Simulation {
         void InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo, int iterations, 
                                       SimulationRange simulationDimensions, SimulationRange chunkDimensions);
         int CheckChunkDimensions();
-        int CheckSpecifiedChunkSize();
+        int CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage);
         int ReconfigureChunkSize(long maxMem);
         void ProcessSimulation();
         bool IsSimulationChunked();
@@ -51,7 +51,7 @@ class Simulation {
 
         int RunSimulation(cl_float * p, cl_float * rhs, int halo, int iterations,
                            SimulationRange simulationDimensions,
-                           SimulationRange chunkDimensions);
+                           SimulationRange chunkDimensions, float maxSimulationAreaMemUsage);
 
         const SimulationAreaStruct & getSimulationArea() const {
             return simulationArea;

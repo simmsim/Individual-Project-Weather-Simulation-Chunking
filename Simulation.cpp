@@ -26,14 +26,15 @@ Simulation::Simulation(int deviceType, char * programFileName,
 int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
                                int halo, int iterations,
                                SimulationRange simulationDimensions, 
-                               SimulationRange chunkDimensions = SimulationRange()) {
+                               SimulationRange chunkDimensions = SimulationRange(),
+                               float maxSimulationAreaMemUsage = 100) {
     int errorCode;
     InitializeSimulationArea(p, rhs, halo, iterations, simulationDimensions, chunkDimensions);
     errorCode = CheckChunkDimensions();
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
     }
-    errorCode = CheckSpecifiedChunkSize();
+    errorCode = CheckSpecifiedChunkSize(maxSimulationAreaMemUsage);
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
     }
@@ -54,10 +55,15 @@ void Simulation::InitializeSimulationArea(cl_float * p, cl_float * rhs, int halo
     simulationArea.halChunkDimensions.incrementDimensionsBy(halo*2);
 }
 
-int Simulation::CheckSpecifiedChunkSize() {
+int Simulation::CheckSpecifiedChunkSize(float maxSimulationAreaMemUsage) {
+    if (maxSimulationAreaMemUsage > 100) {
+        maxSimulationAreaMemUsage = 100;
+    }
+
     long halChunkBlockRequiredMem = simulationArea.halChunkDimensions.getSimulationSize() * sizeof(float);
     long totalRequiredMem = halChunkBlockRequiredMem * ARR_BLOCKS;
-    long allowedSingleBufferMem = oclSetup.deviceProperties.maxMemAllocSize;
+    
+    long allowedSingleBufferMem = (oclSetup.deviceProperties.maxMemAllocSize * maxSimulationAreaMemUsage)/100;
     if (halChunkBlockRequiredMem > allowedSingleBufferMem 
         || totalRequiredMem > oclSetup.deviceProperties.maxGlobalMemSize) {
             std::cout << "Required memory for processing exceeds device limits" << "\n";
