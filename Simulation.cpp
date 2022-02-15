@@ -268,9 +268,10 @@ void Simulation::ChunkAndCompute() {
     cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
-    float *inChunk = (float*)malloc(sizeof(float)*haloChunkSize);
-    float *rhsChunk = (float*)malloc(sizeof(float)*haloChunkSize);
-    float *outChunk = (float*)malloc(sizeof(float)*haloChunkSize);
+    float *inChunk, *outChunk, *rhsChunk = NULL;
+    posix_memalign((void**)&inChunk, 4096, haloChunkSize*sizeof(float));
+    posix_memalign((void**)&outChunk, 4096, haloChunkSize*sizeof(float));
+    posix_memalign((void**)&rhsChunk, 4096, haloChunkSize*sizeof(float));
 
     for (int n = 0; n < simulationArea.iterations; n++) {
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
@@ -295,6 +296,9 @@ void Simulation::ChunkAndCompute() {
                         for (int j = 0; j < jHalChunk; j++) {
                             // TODO: done for 1-point halo: could be more general; future work.
                             // Calculation for offsets are done based on the assumption that we're chunking jChunk = jDim. 
+                            // TODO: 1D and 2D cases are currently not correct as there has been a change in assumptions, mainly, that user
+                            // actually passes in padded data, and these cases were build in unpadded data in mind. 3D updated to work
+                            // correctly as per assumptions.
                             if (kDim == 1 && jDim == 1) {
                                 int inputStartOffset = i_start - 1;
                                 int inputEndOffset = i_start + 1 + currentIChunk;
@@ -325,6 +329,7 @@ void Simulation::ChunkAndCompute() {
 
                                 std::copy(p1 + offset, p1 + inputEndOffset, inChunk + chunkIdx); 
                                 std::copy(simulationArea.rhs + offset, simulationArea.rhs + inputEndOffset, rhsChunk + chunkIdx);   
+                            // The 3D simulation, working correctly.    
                             } else {
                                 int offsetStart = k*iSimDim*jSimDim + j*iSimDim + i_start;
                                 int offsetEnd = offsetStart + iHalChunk;
@@ -338,14 +343,11 @@ void Simulation::ChunkAndCompute() {
 
                     // ****** openCL bit
                     // TODO: maybe move this bit into a separate method?
-                    // Need to get halChuk size as it might have been recalculated for a leftover chunk.
-                    size_t sizeOfHChunk = simulationArea.halChunkDimensions.getSimulationSize();
                     cl_int errorCode;
-
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), inChunk);
-                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, sizeOfHChunk * sizeof(float), rhsChunk);
-                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer.");
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, haloChunkSize * sizeof(float), inChunk);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhsChunk);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunk.");
 
                     oclSetup.kernel.setArg(0, in_p);
                     oclSetup.kernel.setArg(1, out_p);
@@ -378,9 +380,12 @@ void Simulation::ChunkAndCompute() {
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
                     event.wait();
 
-                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, sizeOfHChunk * sizeof(float), outChunk);
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, haloChunkSize * sizeof(float), outChunk);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
 
+                    // TODO: 1D and 2D cases are currently not correct as there has been a change in assumptions, mainly, that user
+                    // actually passes in padded data, and these cases were build in unpadded data in mind. 3D updated to work
+                    // correctly as per assumptions.
                     if (kDim == 1 && jDim == 1) {
                         int arrayEnd = i_start;
                         int chunkIdx = 1;
@@ -395,7 +400,7 @@ void Simulation::ChunkAndCompute() {
                         for (int k = 1; k < kHalChunk - 1; k++) {
                             for (int j = 1; j < jHalChunk - 1; j++) {
                                 int offsetStart = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
-                                int offsetEnd = offsetStart + iChunk;
+                                int offsetEnd = offsetStart + currentIChunk;
                                 int simulationIndex = k*iSimDim*jSimDim + j*iSimDim + i_start + 1;
                                 std::copy(outChunk + offsetStart, outChunk + offsetEnd, p2 + simulationIndex);
                             }
