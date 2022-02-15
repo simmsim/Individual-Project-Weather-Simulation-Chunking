@@ -13,11 +13,8 @@ char * kernelName = (char*) "sor_superkernel";
 
 Simulation initializeAndRun(float * p, float * rhs,
                             SimulationRange simulationRange, SimulationRange chunkRange,
-                            float maxSimulationAreaMemUsage, int iterations, bool isSimple=false) {
+                            float maxSimulationAreaMemUsage, int iterations) {
     generateDomain(p, rhs, simulationRange);
-    if (isSimple) {
-        std::fill(rhs, rhs+(simulationRange.getSimulationSize()), 1.0);
-    } 
 
     int err;
     Simulation simulation = Simulation(deviceType, programFileName, kernelName, &err);
@@ -56,7 +53,7 @@ void testRecomputeChunksFailure() {
 
 void testChunkDimensionsRecalculated() {
     // ARRANGE
-    SimulationRange coreRange = SimulationRange(4, 4, 2);
+    SimulationRange coreRange = SimulationRange(6, 6, 4);
     SimulationRange chunkRange = SimulationRange(3, 4, 2);
     float maxSimulationAreaMemUsage = 0.00006;
     int iterations = 3;
@@ -66,7 +63,7 @@ void testChunkDimensionsRecalculated() {
 
     // EXPECTED
     int expectedDimensionValue = 2;
-    float expectedValue = -0.0768519;
+    float expectedValue = -0.057626;
 
     // ACT
     Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, maxSimulationAreaMemUsage, iterations);
@@ -75,7 +72,7 @@ void testChunkDimensionsRecalculated() {
     SimulationRange newChunkRange = simulation.getSimulationArea().chunkDimensions;
     int actualDimensionValue = newChunkRange.getDimSizes()[0];
     float * actualSimulationArea = simulation.getSimulationArea().p;
-    float actualValue =  actualSimulationArea[F3D2C(4, 4, 0,0,0, 4/2,4/2,2/2)];
+    float actualValue =  actualSimulationArea[F3D2C(6, 6, 0,0,0, 1, 1, 1)];
 
     assertEquals(expectedDimensionValue, actualDimensionValue, 
                 "testChunkDimensionsRecalculated: new chunk dimensions was re-computed correctly.");
@@ -88,47 +85,56 @@ void testChunkDimensionsRecalculated() {
     free(rhs);
 }
 
-void testProcessingSimpleCase() {
+void testChunkingSetup(SimulationRange chunkRange, std::string testName) {
     // ARRANGE
-    SimulationRange simulationRange = SimulationRange(6, 6, 4);
-    SimulationRange chunkRange = SimulationRange(4, 4, 2);
-    int iterations = 2;
-    float maxSimulationAreaMemUsage = 95;
+    SimulationRange simulationRange = SimulationRange(152, 152, 92);
+    int iterations = 5;
+    float maxSimulationAreaMemUsage = 99;
     int pSize = simulationRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
     float *rhs = (float*)malloc(sizeof(float)*pSize);
 
     // ACT
-    Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, maxSimulationAreaMemUsage, iterations, true);
+    Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, maxSimulationAreaMemUsage, iterations);
+
+    // EXPECTED
+    float expectedTopLeftValue = -0.166636;
+    float expectedBottomRightValue = -0.180353;
     
     // ASSERT
     float * actualSimulationArea = simulation.getSimulationArea().p;
+    float actualTopLeftValue =  actualSimulationArea[F3D2C(152, 152, 0,0,0, 1,1,1)];
+    float actualBottomRightValue =  actualSimulationArea[F3D2C(152, 152, 0,0,0, 150,150,1)];
 
-    for (int idx = 0; idx < pSize; idx++) {
-        std::cout << actualSimulationArea[idx]<< " ";
-    }
-    std::cout << "\n\n";
-    
-    /*
-    float index = F3D2C(6, 6, 0,0,0, 1, 1, 0);
-    std::cout << "index is " << index << "\n";
-    float actualValue =  p[F3D2C(6, 6, 0,0,0, 1, 1, 0)];
-    std::cout << "actual value is " << actualValue << "\n";
-    */
-
-    /*
-    assertEquals(expectedValue, actualValue, "testProcessingSimpleCase");
-    */
+    assertEquals(expectedTopLeftValue, actualTopLeftValue, testName + ": check for top left value");
+    assertEquals(expectedBottomRightValue, actualBottomRightValue, testName + ": check for bottom right value");
 
     // TEARDOWN
     free(p);
     free(rhs);
 }
 
+void testProcessingFullSimulationWithoutChunking() {
+    SimulationRange chunkRange = SimulationRange(150, 150, 90);
+    testChunkingSetup(chunkRange, "testProcessingFullSimulationWithoutChunking");
+}
+
+void testProcessingSimulationInEqualChunks() {
+    SimulationRange chunkRange = SimulationRange(75, 150, 90);
+    testChunkingSetup(chunkRange, "testProcessingSimulationInEqualChunks");
+}
+
+void testProcessingSimulationWithLeftoverChunk() {
+    SimulationRange chunkRange = SimulationRange(100, 150, 90);
+    testChunkingSetup(chunkRange, "testProcessingSimulationWithLeftoverChunk");
+}
+
 int main(void) {
-    //testChunkDimensionsRecalculated();
-    testProcessingSimpleCase();
-    //testRecomputeChunksFailure();
+    testProcessingFullSimulationWithoutChunking();
+    testProcessingSimulationInEqualChunks();
+    testProcessingSimulationWithLeftoverChunk();
+    testChunkDimensionsRecalculated();
+    testRecomputeChunksFailure();
     
     return 0;
 }
