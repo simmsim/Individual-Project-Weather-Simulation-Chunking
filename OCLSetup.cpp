@@ -79,6 +79,11 @@ int OCLSetup::CreateKernelFromProgram(char * programFileName,
     errorCode = kernelProgram.build(device);
     ErrorHelper::testError(errorCode, "Failed to build the program");
     cl_build_status status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+    if (status == CL_BUILD_ERROR) {
+        std::string buildlog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+        std::cerr << "Build log for " << deviceProperties.deviceName << ":" << std::endl
+                << buildlog << std::endl;
+    }
     program = kernelProgram;
     kernel = cl::Kernel(program, kernelName, &errorCode);
     ErrorHelper::testError(errorCode, "Failed to create the kernel");
