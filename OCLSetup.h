@@ -11,6 +11,7 @@ typedef struct devicePropertiesStruct {
     cl_device_type deviceType; 
     std::string deviceName;
     long maxMemAllocSize;
+    long maxGlobalMemSize;
 } devicePropertiesStruct;
 
 class OCLSetup {

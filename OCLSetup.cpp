@@ -49,6 +49,7 @@ int OCLSetup::CreateContext(int deviceType_) {
 void OCLSetup::SetDeviceProperties() {
     deviceProperties.deviceName = device.getInfo<CL_DEVICE_NAME>();
     deviceProperties.maxMemAllocSize = device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
+    deviceProperties.maxGlobalMemSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
 }
 
 int OCLSetup::CreateCommandQueue() {
