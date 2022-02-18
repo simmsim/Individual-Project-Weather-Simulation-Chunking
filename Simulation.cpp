@@ -350,10 +350,18 @@ void Simulation::ChunkAndCompute() {
                     // ****** openCL bit
                     // TODO: maybe move this bit into a separate method?
                     cl_int errorCode;
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, haloChunkSize * sizeof(float), inChunk);
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, haloChunkSize * sizeof(float), inChunk, nullptr, &oclSetup.event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhsChunk);
+                    if (PROFILING_ENABLED == 1) {
+                        oclSetup.event.wait();
+                        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+                    }
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhsChunk, nullptr, &oclSetup.event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunk.");
+                    if (PROFILING_ENABLED == 1) {
+                        oclSetup.event.wait();
+                        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+                    }               
 
                     oclSetup.kernel.setArg(0, in_p);
                     oclSetup.kernel.setArg(1, out_p);
@@ -384,9 +392,16 @@ void Simulation::ChunkAndCompute() {
                         cl::NullRange, nullptr, &oclSetup.event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
                     oclSetup.event.wait();
+                    if (PROFILING_ENABLED == 1) {
+                        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clKernelExecution);
+                    }
 
-                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, haloChunkSize * sizeof(float), outChunk);
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, haloChunkSize * sizeof(float), outChunk, nullptr, &oclSetup.event);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
+                    if (PROFILING_ENABLED == 1) {
+                        oclSetup.event.wait();
+                        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clReadFromDevice);
+                    }
 
                     // TODO: 1D and 2D cases are currently not correct as there has been a change in assumptions, mainly, that user
                     // actually passes in padded data, and these cases were build in unpadded data in mind. 3D updated to work
