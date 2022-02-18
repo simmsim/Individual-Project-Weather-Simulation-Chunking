@@ -53,8 +53,9 @@ int main(int argc, char* argv[]) {
     if (PROFILING_ENABLED) {
         print_avg_to_file(simulation.getPerformanceMeasurements().clKernelExecution, fileName, "Kernel");
         print_total_write_avg_to_file(simulation.getPerformanceMeasurements().clWriteToDevice, fileName, "Write");
-        print_to_file(simulation.getPerformanceMeasurements().clReadFromDevice, fileName, "Read");
+        print_avg_to_file(simulation.getPerformanceMeasurements().clReadFromDevice, fileName, "Read");
     }
+    print_new_line_to_file(fileName);
 
     free(fileName);
     free(p);
