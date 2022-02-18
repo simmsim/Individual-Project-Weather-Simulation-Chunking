@@ -27,7 +27,7 @@ void print_to_file(std::vector<double> measurementsVec, char * fileName, std::st
 
         std::ofstream outfile;
         outfile.open(fileName, std::ios_base::app);
-        outfile << "\n" << description << "[ms] " << measurementMs << "\n";
+        outfile << description << "[ms] " << measurementMs << "\n";
         outfile << description << "[µs] " << measurementMcs << "\n\n";
     }
 }
@@ -44,8 +44,8 @@ void print_avg_to_file(std::vector<double> measurementsVec, char * fileName, std
     std::ofstream outfile;
     outfile.open(fileName, std::ios_base::app);
 
-    outfile << "\n" << description << "[ms] " << measurementMs/countOfMeasurements << "\n";
-    outfile << description << "[µs] " << measurementMicros/countOfMeasurements << "\n\n";
+    outfile << description << "[ms] " << measurementMs/countOfMeasurements << "\n";
+    outfile << description << "[µs] " << measurementMicros/countOfMeasurements << "\n";
 }
 
 void print_total_write_avg_to_file(std::vector<double> measurementsVec, char * fileName, std::string description) {
@@ -64,7 +64,7 @@ void print_total_write_avg_to_file(std::vector<double> measurementsVec, char * f
     std::ofstream outfile;
     outfile.open(fileName, std::ios_base::app);
 
-    outfile << "\n" << description << "[ms] " << measurementMs/countOfMeasurements << "\n";
-    outfile << description << "[µs] " << measurementMicros/countOfMeasurements << "\n\n";
+    outfile << description << "[ms] " << measurementMs/countOfMeasurements << "\n";
+    outfile << description << "[µs] " << measurementMicros/countOfMeasurements << "\n";
 }
 
