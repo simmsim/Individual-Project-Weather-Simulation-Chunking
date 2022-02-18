@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
     int iterations = atoi(argv[2]);
     int deviceType = atoi(argv[3]);
     int halo = 1;
-    float maxSimulationAreaMemUsage = 99;
+    float maxSimulationAreaMemUsage = 100;
 
     int pSize = coreRange.getSimulationSize();
     float *p = (float*)malloc(sizeof(float)*pSize);
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     std::chrono::steady_clock::time_point beginSimulationOnly = std::chrono::steady_clock::now();
-    err = simulation.RunSimulation(p, rhs, halo, iterations, maxSimulationAreaMemUsage, coreRange, chunkRange); 
+    err = simulation.RunSimulation(p, rhs, halo, iterations, coreRange, chunkRange, maxSimulationAreaMemUsage); 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     if (err != 0) {
         std::cout << "Simulation execution failed with error code " << err << "\n";
@@ -42,8 +42,8 @@ int main(int argc, char* argv[]) {
     }
    
    float * actualSimulationArea = simulation.getSimulationArea().p;
-   float actualValue =  actualSimulationArea[F3D2C(ip, jp, 0,0,0, 1,1,1)];
-   std::cout << "Value was " << actualValue << "\n";
+   // float actualValue =  actualSimulationArea[F3D2C(ip, jp, 0,0,0, 1,1,1)];
+   // std::cout << "Value was " << actualValue << "\n";
 
     char * fileName = (char *)malloc(strlen(argv[1]) + 1);
     strcpy(fileName, argv[1]);
@@ -51,9 +51,9 @@ int main(int argc, char* argv[]) {
     print_to_file(beginWithSetup, end, fileName, "ElapsedOCL");
     print_to_file(beginSimulationOnly, end, fileName, "ElapsedSimulationOnly");
     if (PROFILING_ENABLED) {
-        print_avg_to_file(simulation.getPerformanceMeasurements().clKernelExecution, fileName, "Core kernel execution");
-        print_to_file(simulation.getPerformanceMeasurements().clReadFromDevice, fileName, "Read from device");
-        print_total_write_avg_to_file(simulation.getPerformanceMeasurements().clWriteToDevice, fileName, "Write to device");
+        print_avg_to_file(simulation.getPerformanceMeasurements().clKernelExecution, fileName, "Kernel");
+        print_total_write_avg_to_file(simulation.getPerformanceMeasurements().clWriteToDevice, fileName, "Write");
+        print_to_file(simulation.getPerformanceMeasurements().clReadFromDevice, fileName, "Read");
     }
 
     free(fileName);
