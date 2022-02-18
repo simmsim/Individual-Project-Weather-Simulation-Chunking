@@ -21,6 +21,7 @@ class OCLSetup {
         cl::Program program;
         cl::Kernel kernel;
         cl::CommandQueue commandQueue;
+        cl::Event event;
         devicePropertiesStruct deviceProperties;
 
         OCLSetup() = default;

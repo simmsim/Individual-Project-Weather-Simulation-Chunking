@@ -154,21 +154,19 @@ void Simulation::ComputeFullSimulation() {
     cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
-    cl::Event eventWriteSimulation;
     cl_int errorCode;
-    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &eventWriteSimulation);
+    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.event);
     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for simulation p.");
     if (PROFILING_ENABLED == 1) {
-        eventWriteSimulation.wait();
-        MeasureEventPerformance(eventWriteSimulation, performanceMeasurements.clWriteToDevice);
+        oclSetup.event.wait();
+        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
     }
 
-    cl::Event eventWriteRhs;
-    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &eventWriteRhs);
+    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &oclSetup.event);
     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhs.");
     if (PROFILING_ENABLED == 1) {
-        eventWriteRhs.wait();
-        MeasureEventPerformance(eventWriteRhs, performanceMeasurements.clWriteToDevice);
+        oclSetup.event.wait();
+        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
     }
    
     oclSetup.kernel.setArg(2, rhsBuffer);
@@ -187,12 +185,11 @@ void Simulation::ComputeFullSimulation() {
         }     
     }
 
-    cl::Event readEvent;
-    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &readEvent);
+    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.event);
     ErrorHelper::testError(errorCode, "Failed to read back from the device");
     if (PROFILING_ENABLED == 1) {
-        readEvent.wait();
-        MeasureEventPerformance(readEvent, performanceMeasurements.clReadFromDevice);
+        oclSetup.event.wait();
+        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clReadFromDevice);
     }
 }
 
@@ -211,18 +208,17 @@ void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
     EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));                
     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
     
-    cl::Event event;
     int coreState = CORE;
     oclSetup.kernel.setArg(6, &coreState);
     cl_int errorCode;
     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(coreArea),
-        cl::NullRange, nullptr, &event);
+        cl::NullRange, nullptr, &oclSetup.event);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
     // clFinish(oclSetup.commandQueue.get());
-    event.wait();
+    oclSetup.event.wait();
 
     if (PROFILING_ENABLED == 1) {
-        MeasureEventPerformance(event, performanceMeasurements.clKernelExecution);
+        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clKernelExecution);
     }
 }
 
@@ -382,13 +378,12 @@ void Simulation::ChunkAndCompute() {
                     // Periodic applies to each chunk since we're chunking in such manner that both j sides are included.
                     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
 
-                    cl::Event event;
                     int coreState = CORE;
                     oclSetup.kernel.setArg(6, &coreState);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(currentIChunk*jChunk*kChunk),
-                        cl::NullRange, nullptr, &event);
+                        cl::NullRange, nullptr, &oclSetup.event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
-                    event.wait();
+                    oclSetup.event.wait();
 
                     errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, haloChunkSize * sizeof(float), outChunk);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
@@ -436,9 +431,7 @@ void Simulation::ChunkAndCompute() {
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
-    cl::Event event;
     oclSetup.kernel.setArg(6, &type);
-    cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr, &event);
+    cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel for a condition");
-    event.wait();
 }
