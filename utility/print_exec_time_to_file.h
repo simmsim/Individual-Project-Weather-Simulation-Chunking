@@ -20,16 +20,10 @@ void print_to_file(std::chrono::steady_clock::time_point begin,
     print_to_file(begin, end, fileName, description);
 }
 
-void print_to_file(std::vector<double> measurementsVec, char * fileName, std::string description) {
-    for (double measurement: measurementsVec) {
-        long measurementMs = round(measurement)*1.0e-6;
-        long measurementMcs = round(measurement)*1.0e-3;
-
-        std::ofstream outfile;
-        outfile.open(fileName, std::ios_base::app);
-        outfile << description << "[ms] " << measurementMs << "\n";
-        outfile << description << "[µs] " << measurementMcs << "\n\n";
-    }
+void print_new_line_to_file(char * fileName) {
+    std::ofstream outfile;
+    outfile.open(fileName, std::ios_base::app);
+    outfile << "\n";
 }
 
 void print_avg_to_file(std::vector<double> measurementsVec, char * fileName, std::string description) {
