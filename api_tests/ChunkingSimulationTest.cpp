@@ -67,7 +67,6 @@ void testChunkingSetup(SimulationRange chunkRange, std::string testName) {
 
     // ACT
     Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, iterations);
-
     // EXPECTED
     float expectedTopLeftValue = -0.166636;
     float expectedBottomRightValue = -0.180353;

@@ -244,10 +244,7 @@ void Simulation::ChunkAndCompute() {
 
     size_t coreSize = simulationArea.simulationDimensions.getSimulationSize();
     float *p2 = (float*)malloc(sizeof(float)*coreSize);
-    // float * p1 = simulationArea.p;
-    // Didn't work properly when program was set with just pointing to simulationArea. TODO: check later if it can be fixed.
-    float * p1 = (float*)malloc(sizeof(float)*coreSize);
-    std::copy(simulationArea.p, simulationArea.p + coreSize, p1);
+    float *p1 = &*simulationArea.p;
 
     int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
@@ -430,19 +427,26 @@ void Simulation::ChunkAndCompute() {
             }
         }
         // the output array becomes our problem/input array for next iteration
-        float * intermediate = p1;
-        p1 = p2;
-        p2 = intermediate;
+        float *temp = &*p1;
+        p1 = &*p2;
+        p2 = &*temp;
     }
-    std::copy(p1, p1 + coreSize, simulationArea.p);
-    
+
+    // Depending on the number of iterations, we might need to copy back the final result values
+    // into the user's simulation area.
+    if (simulationArea.iterations % 2 != 0 ){
+        std::copy(p1, p1 + coreSize, simulationArea.p);
+        free(p1);
+        p2 = NULL;
+    } else {
+        free(p2);
+        p1 = NULL;
+    }
+
     // Fly away and be free.
     free(inChunk);
     free(rhsChunk);
     free(outChunk);
-
-    free(p2);
-    free(p1);
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
