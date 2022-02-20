@@ -34,6 +34,8 @@ void testChunkDimensionsRecalculated() {
     float *rhs = (float*)malloc(sizeof(float)*pSize);
 
     // EXPECTED
+    // the dimension vlaue calculated will be machine specific, since calculation is based on the amount
+    // of available data
     int expectedDimensionValue = 30;
     float expectedValue = -0.166636;
 
