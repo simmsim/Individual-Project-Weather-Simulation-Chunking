@@ -26,39 +26,16 @@ void print_new_line_to_file(char * fileName) {
     outfile << "\n";
 }
 
-void print_avg_to_file(std::vector<double> measurementsVec, char * fileName, std::string description) {
+void print_total_to_file(std::vector<double> measurementsVec, char * fileName, std::string description) {
     long long measurementMicros = 0.0;
     for (double measurement: measurementsVec) {
         measurementMicros += round(measurement)/1000;
     }
     long long measurementMs = measurementMicros/1000;
-    
-    int countOfMeasurements = measurementsVec.size();
 
     std::ofstream outfile;
     outfile.open(fileName, std::ios_base::app);
 
-    outfile << description << "[ms] " << measurementMs/countOfMeasurements << "\n";
-    outfile << description << "[µs] " << measurementMicros/countOfMeasurements << "\n";
+    outfile << description << "[ms] " << measurementMs << "\n";
+    outfile << description << "[µs] " << measurementMicros << "\n";
 }
-
-void print_total_write_avg_to_file(std::vector<double> measurementsVec, char * fileName, std::string description) {
-    
-    long long measurementMicros = 0.0;
-    for (int i = 0; i < measurementsVec.size(); i += 2) {
-        double writeP = round(measurementsVec[i]);
-        double writeRhs = round(measurementsVec[i+1]);
-        measurementMicros += (writeP+writeRhs)/1000;
-    }
-    long long measurementMs = measurementMicros/1000;
-
-    int countOfMeasurements = measurementsVec.size()/2;
-
-    // repeated code, refactor later
-    std::ofstream outfile;
-    outfile.open(fileName, std::ios_base::app);
-
-    outfile << description << "[ms] " << measurementMs/countOfMeasurements << "\n";
-    outfile << description << "[µs] " << measurementMicros/countOfMeasurements << "\n";
-}
-
