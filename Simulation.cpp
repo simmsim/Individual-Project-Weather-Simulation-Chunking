@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <math.h>
+#include <chrono>
 
 #define PERIODIC 1
 #define INFLOW 2
@@ -133,6 +134,7 @@ void Simulation::ProcessSimulation() {
         ChunkAndCompute();
     } else {
         ComputeFullSimulation();
+        std::cout << "COMPUTE FULL\n";
     }
 }
 
@@ -147,26 +149,39 @@ void Simulation::ComputeFullSimulation() {
     size_t simulationSize = simulationArea.simulationDimensions.getSimulationSize();
 
     cl_int err;
-    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an in buffer"); 
-    cl::Buffer rhsBuffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an rhs buffer");                    
-    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an out buffer");
-
     cl_int errorCode;
-    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.event);
-    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for simulation p.");
-    if (PROFILING_ENABLED == 1) {
-        oclSetup.event.wait();
-        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
-    }
+    cl::Buffer in_p;
+    cl::Buffer rhsBuffer;
+    cl::Buffer out_p;
+    if (oclSetup.deviceProperties.deviceType == CL_DEVICE_TYPE_CPU) {
+        in_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), simulationArea.p, &err);
+        ErrorHelper::testError(err, "Failed to create an in buffer"); 
+        rhsBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), simulationArea.rhs, &err);
+        ErrorHelper::testError(err, "Failed to create an rhs buffer");
+        out_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
+        ErrorHelper::testError(err, "Failed to create an out buffer");
+    } else {
+        std::cout << "hehe\n";
+        in_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
+        ErrorHelper::testError(err, "Failed to create an in buffer"); 
+        rhsBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
+        ErrorHelper::testError(err, "Failed to create an rhs buffer");
+        out_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
+        ErrorHelper::testError(err, "Failed to create an out buffer");
 
-    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &oclSetup.event);
-    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhs.");
-    if (PROFILING_ENABLED == 1) {
-        oclSetup.event.wait();
-        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.event);
+        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for simulation p.");
+        if (PROFILING_ENABLED == 1) {
+            oclSetup.event.wait();
+            MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+        }
+
+        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &oclSetup.event);
+        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhs.");
+        if (PROFILING_ENABLED == 1) {
+            oclSetup.event.wait();
+            MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+        }
     }
    
     oclSetup.kernel.setArg(2, rhsBuffer);
@@ -202,7 +217,6 @@ void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
 
     oclSetup.kernel.setArg(0, in_p);
     oclSetup.kernel.setArg(1, out_p);
-    
     EnqueueKernel(INFLOW, cl::NDRange(1*jHalChunk*kHalChunk));                
     EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));               
     EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));                
@@ -280,6 +294,7 @@ void Simulation::ChunkAndCompute() {
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
             for (int j_start = 0; j_start < jDim; j_start += jChunk) {
                 for (int i_start = 0; i_start < iDim; i_start += iChunk) {
+                    std::chrono::steady_clock::time_point beginChunkSetup = std::chrono::steady_clock::now();
                     // Logic to deal with a leftover chunk.
                     if (i_start + iChunk > iDim) {
                         currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
@@ -343,6 +358,9 @@ void Simulation::ChunkAndCompute() {
                             }
                         }
                     }
+
+                    std::chrono::steady_clock::time_point endChunkSetup = std::chrono::steady_clock::now();
+                    performanceMeasurements.constructChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endChunkSetup - beginChunkSetup).count());
 
                     // ****** openCL bit
                     // TODO: maybe move this bit into a separate method?
@@ -414,6 +432,7 @@ void Simulation::ChunkAndCompute() {
                             std::copy(outChunk + chunkIdx, outChunk + chunkIdx + currentIChunk, p2+arrayEnd);
                         }
                     } else {
+                        std::chrono::steady_clock::time_point beginReintegrate = std::chrono::steady_clock::now();
                         for (int k = 1; k < kHalChunk - 1; k++) {
                             for (int j = 1; j < jHalChunk - 1; j++) {
                                 int offsetStart = k*iHalChunk*jHalChunk + j*iHalChunk + 1;
@@ -422,7 +441,10 @@ void Simulation::ChunkAndCompute() {
                                 std::copy(outChunk + offsetStart, outChunk + offsetEnd, p2 + simulationIndex);
                             }
                         }
+                        std::chrono::steady_clock::time_point endReintegrate = std::chrono::steady_clock::now();
+                        performanceMeasurements.reintegrateChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endReintegrate - beginReintegrate).count());
                     }
+                    
                 }
             }
         }
