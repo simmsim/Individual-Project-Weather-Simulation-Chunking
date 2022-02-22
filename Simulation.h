@@ -19,9 +19,8 @@ typedef struct PerformanceMeasurementsStruct {
     std::vector<double> clWriteToDevice;
     std::vector<double> clKernelExecution;
     std::vector<double> clReadFromDevice;
-
-    std::vector<long> constructChunk;
-    std::vector<long> reintegrateChunk;
+    std::vector<double> constructChunk;
+    std::vector<double> reintegrateChunk;
 } PerformanceMeasurementsStruct;
 
 class Simulation {
