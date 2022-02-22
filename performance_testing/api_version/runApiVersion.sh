@@ -13,6 +13,10 @@ nameIndexDictionary["Write[ms]"]=6
 nameIndexDictionary["Write[µs]"]=7
 nameIndexDictionary["Read[ms]"]=8
 nameIndexDictionary["Read[µs]"]=9
+nameIndexDictionary["ConstructChunk[ms]"]=10
+nameIndexDictionary["ConstructChunk[µs]"]=11
+nameIndexDictionary["ReintegrateChunk[ms]"]=12
+nameIndexDictionary["ReintegrateChunk[µs]"]=13
 
 declare -a orders
 orders+=( "ElapsedOCL[ms]" )
@@ -25,6 +29,10 @@ orders+=( "Write[ms]" )
 orders+=( "Write[µs]" )
 orders+=( "Read[ms]" )
 orders+=( "Read[µs]" )
+orders+=( "ConstructChunk[ms]" )
+orders+=( "ConstructChunk[µs]" )
+orders+=( "ReintegrateChunk[ms]" )
+orders+=( "ReintegrateChunk[µs]" )
 
 function addMeasurement() {
     index="$1"
@@ -68,14 +76,14 @@ location="../performance_testing/api_version/"
 fileName="${fileNameStem}${deviceName}_${timestamp}.txt"
 
 numberOfRuns=5
-numberOfIterations=5
+numberOfIterations=1
 # 0 for CPU and 1 for GPU
 device=0
-ip=152
-jp=152
+ip=602
+jp=602
 kp=92
-cip=150
-cjp=150
+cip=300
+cjp=600
 ckp=90
 
 numberOfRunsDescription="Number of runs ${numberOfRuns}"
@@ -93,7 +101,7 @@ echo -e "${chunkDimensionsDescription}\n" >> ${fileName}
 echo "The execution time results will be printed to ${fileName}, where:"
 echo "${numberOfRunsDescription}"
 echo "${numberOfIterationsDescription}"
-echo "${dimensionsDescription}"
+echo "${coreDimensionsDescription}"
 echo "${chunkDimensionsDescription}"
 
 ### Save dimension properties to param file
