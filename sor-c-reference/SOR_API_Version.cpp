@@ -51,9 +51,11 @@ int main(int argc, char* argv[]) {
     print_to_file(beginWithSetup, end, fileName, "ElapsedOCL");
     print_to_file(beginSimulationOnly, end, fileName, "ElapsedSimulationOnly");
     if (PROFILING_ENABLED) {
-        print_avg_to_file(simulation.getPerformanceMeasurements().clKernelExecution, fileName, "Kernel");
-        print_total_write_avg_to_file(simulation.getPerformanceMeasurements().clWriteToDevice, fileName, "Write");
-        print_avg_to_file(simulation.getPerformanceMeasurements().clReadFromDevice, fileName, "Read");
+        print_total_to_file(simulation.getPerformanceMeasurements().clKernelExecution, fileName, "Kernel");
+        print_total_to_file(simulation.getPerformanceMeasurements().clWriteToDevice, fileName, "Write");
+        print_total_to_file(simulation.getPerformanceMeasurements().clReadFromDevice, fileName, "Read");
+        print_total_to_file(simulation.getPerformanceMeasurements().constructChunk, fileName, "ConstructChunk");
+        print_total_to_file(simulation.getPerformanceMeasurements().reintegrateChunk, fileName, "ReintegrateChunk");
     }
     print_new_line_to_file(fileName);
 
