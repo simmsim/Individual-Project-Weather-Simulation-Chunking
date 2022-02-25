@@ -354,6 +354,7 @@ void Simulation::ChunkAndCompute() {
                                 int chunkIndex = k*iHalChunk*jHalChunk + j*iHalChunk;
                                 
                                 std::copy(p1 + offsetStart, p1 + offsetEnd, inChunk + chunkIndex);   
+                                // TODO: this copy of rhs is unnecessary & will be moved out from the loop; chunks of rhs will be created outside this loop
                                 std::copy(simulationArea.rhs + offsetStart, simulationArea.rhs + offsetEnd, rhsChunk + chunkIndex);                       
                             }
                         }
