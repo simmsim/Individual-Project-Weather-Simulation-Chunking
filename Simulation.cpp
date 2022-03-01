@@ -270,10 +270,13 @@ void Simulation::ChunkAndCompute() {
     int noOfFullChunks = coreSizeij/chunkSizeij;
     int noOfLeftoverChunks = coreSizeij % chunkSizeij == 0 ? 0 : 1;
     int leftoverIChunk = noOfLeftoverChunks == 1 ? (coreSizeij - noOfFullChunks*chunkSizeij)/jChunk : 0;
+    int totalNoOfChunks = noOfFullChunks + noOfLeftoverChunks;
 
     int iHalChunk = simulationArea.halChunkDimensions.getDimSizes()[0];
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
+
+    int iHalChunkFullChunk = iHalChunk;
 
     size_t haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
 
@@ -285,25 +288,69 @@ void Simulation::ChunkAndCompute() {
     cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
-    float *inChunk, *outChunk, *rhsChunk = NULL;
+    float *inChunk, *outChunk= NULL;
     posix_memalign((void**)&inChunk, 4096, haloChunkSize*sizeof(float));
     posix_memalign((void**)&outChunk, 4096, haloChunkSize*sizeof(float));
-    posix_memalign((void**)&rhsChunk, 4096, haloChunkSize*sizeof(float));
+
+    float* rhsChunks[totalNoOfChunks];
+    // float* inChunks[totalNoOfChunks];
+    // float* outChunks[totalNoOfChunks];
+
+    for (int i = 0; i < noOfFullChunks; i++) {
+        posix_memalign((void**)&rhsChunks[i], 4096, haloChunkSize*sizeof(float));
+        // posix_memalign((void**)&inChunks[i], 4096, haloChunkSize*sizeof(float));
+        // posix_memalign((void**)&outChunks[i], 4096, haloChunkSize*sizeof(float));
+    }
+    if (noOfLeftoverChunks != 0) {
+        int index = totalNoOfChunks - 1;
+        int leftoverChunkSize = (((coreSizeij % chunkSizeij) / jChunk) + 2)*jHalChunk*kHalChunk;
+        posix_memalign((void**)&rhsChunks[index], 4096, leftoverChunkSize*sizeof(float));
+        // posix_memalign((void**)&inChunks[index], 4096, leftoverChunkSize*sizeof(float));
+        // posix_memalign((void**)&outChunks[index], 4096, leftoverChunkSize*sizeof(float));
+    }
 
     for (int n = 0; n < simulationArea.iterations; n++) {
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
             for (int j_start = 0; j_start < jDim; j_start += jChunk) {
                 for (int i_start = 0; i_start < iDim; i_start += iChunk) {
-                    std::chrono::steady_clock::time_point beginChunkSetup = std::chrono::steady_clock::now();
+                    // Determine which rhs chunk is required.
+                    int currentChunkIndex = ((i_start + iChunk)/iChunk) - 1;
+                    
                     // Logic to deal with a leftover chunk.
                     if (i_start + iChunk > iDim) {
                         currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
                         iHalChunk = currentIChunk + 2;
                         simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
                         haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
+                        currentChunkIndex = totalNoOfChunks - 1;
+                    } 
+
+                    // Above code changes simulationArea.halChunkDimensions object values; 
+                    // When we're in a non-leftover chunk, we need to reset some values.
+                    if (noOfLeftoverChunks != 0 && i_start + iChunk < iDim) {
+                        currentIChunk = iChunk;
+                        iHalChunk = currentIChunk + 2;
+                        simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
+                        haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
                     }
 
+                    // Point to the correct chunk.
+                    float *rhsChunk = rhsChunks[currentChunkIndex];
+                    // float *inChunk = rhsChunks[currentChunkIndex];
+                    // float *outChunk = rhsChunks[currentChunkIndex];
+
+                    std::chrono::steady_clock::time_point beginChunkSetup = std::chrono::steady_clock::now();
+
+                    // This is for contiguous 1D!!!
+                    // int start = kHalChunk*jHalChunk*i_start;
+                    // int end = start + iHalChunk*kHalChunk*jHalChunk;
+                    // if (n == 0) {
+                    //     std::memcpy(rhsChunk, simulationArea.rhs + start, haloChunkSize*sizeof(float));
+                    // }   
+                    // std::memcpy(inChunk, p1 + start, haloChunkSize*sizeof(float));
+                    
                     // Build a chunk, copy values in from core.
+
                     for (int k = 0; k < kHalChunk; k++) {
                         if (((k_start == 0 && k == 0) ||
                             (k_start + kChunk == kDim && k + 1 == kHalChunk)) && kDim > 1) {
@@ -351,19 +398,27 @@ void Simulation::ChunkAndCompute() {
                             } else {
                                 int offsetStart = k*iSimDim*jSimDim + j*iSimDim + i_start;
                                 int offsetEnd = offsetStart + iHalChunk;
-                                int chunkIndex = k*iHalChunk*jHalChunk + j*iHalChunk;
+                                int chunkIdx = k*iHalChunk*jHalChunk + j*iHalChunk;
                                 
-                                std::copy(p1 + offsetStart, p1 + offsetEnd, inChunk + chunkIndex);   
-                                std::copy(simulationArea.rhs + offsetStart, simulationArea.rhs + offsetEnd, rhsChunk + chunkIndex);                       
+                                std::copy(p1 + offsetStart, p1 + offsetEnd, inChunk + chunkIdx);  
+                                // RHS values don't change so we only need to chunk it once 
+                                if (n == 0) {
+                                    std::copy(simulationArea.rhs + offsetStart, simulationArea.rhs + offsetEnd, rhsChunk + chunkIdx);  
+                                }                     
                             }
                         }
                     }
+                    // std::cout << "Rhs chunk number " << currentChunkIndex << ":\n";
+                    // std::cout << "Rhs chunk size " << simulationArea.halChunkDimensions.getSimulationSize() << "\n";
+                    // for (int i = 0; i < haloChunkSize; i++) {
+                    //     std::cout << " " << rhsChunk[i];
+                    // }
+                    // std::cout << "\n\n";
 
                     std::chrono::steady_clock::time_point endChunkSetup = std::chrono::steady_clock::now();
                     performanceMeasurements.constructChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endChunkSetup - beginChunkSetup).count());
 
-                    // ****** openCL bit
-                    // TODO: maybe move this bit into a separate method?
+                    // ****** openCL bit     
                     cl_int errorCode;
                     errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, haloChunkSize * sizeof(float), inChunk, nullptr, &oclSetup.event);
                     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
@@ -376,7 +431,7 @@ void Simulation::ChunkAndCompute() {
                     if (PROFILING_ENABLED == 1) {
                         oclSetup.event.wait();
                         MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
-                    }               
+                    }
 
                     oclSetup.kernel.setArg(0, in_p);
                     oclSetup.kernel.setArg(1, out_p);
@@ -444,7 +499,12 @@ void Simulation::ChunkAndCompute() {
                         std::chrono::steady_clock::time_point endReintegrate = std::chrono::steady_clock::now();
                         performanceMeasurements.reintegrateChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endReintegrate - beginReintegrate).count());
                     }
-                    
+                    // This is for contiguous 1D!!!
+                    // reintegrate result up until last slice, since we don't want to overwrite second chunks slice
+                    // std::chrono::steady_clock::time_point beginReintegrate = std::chrono::steady_clock::now();
+                    // std::copy(outChunk, outChunk + haloChunkSize, p2);
+                    // std::chrono::steady_clock::time_point endReintegrate = std::chrono::steady_clock::now();
+                    // performanceMeasurements.reintegrateChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endReintegrate - beginReintegrate).count());
                 }
             }
         }
@@ -467,8 +527,16 @@ void Simulation::ChunkAndCompute() {
 
     // Fly away and be free.
     free(inChunk);
-    free(rhsChunk);
     free(outChunk);
+    // free(rhsChunk);
+
+    for (int i = 0; i < totalNoOfChunks; i++) {
+        free(rhsChunks[i]);
+    }
+    // if (noOfLeftoverChunks != 0) {
+    //     int index = totalNoOfChunks - 1;
+    //     free(rhsChunks[index]);
+    // }
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
