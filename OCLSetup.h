@@ -1,5 +1,6 @@
 #include <CL/opencl.hpp>
 #include <string>
+// CL/cl.hpp
 
 #include "ErrorHelper.h"
 #include "ErrorCodes.h"
@@ -22,6 +23,8 @@ class OCLSetup {
         cl::Kernel kernel;
         cl::CommandQueue commandQueue;
         cl::Event event;
+        cl::Event kernelEvent;
+        cl::Event readEvent;
         devicePropertiesStruct deviceProperties;
 
         OCLSetup() = default;
