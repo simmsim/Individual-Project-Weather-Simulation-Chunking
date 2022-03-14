@@ -1,5 +1,4 @@
 #include "Simulation.h"
-
 #include <iostream>
 #include <math.h>
 #include <chrono>
@@ -39,8 +38,8 @@ int Simulation::RunSimulation(cl_float * p, cl_float * rhs,
     if (errorCode != CHUNK_SUCCESS) {
         return errorCode;
     }
+    // TODO: introduce error checing for this as well; for now return success.
     ProcessSimulation();
-    // for now return success
     return CHUNK_SUCCESS;
 }
 
@@ -129,11 +128,11 @@ int Simulation::ReconfigureChunkSize(long maxMem) {
     return CHUNK_SUCCESS;
 }
 
+// We still want to retain the ability of processing whole chunks.
 void Simulation::ProcessSimulation() {
     if (IsSimulationChunked()) {
         ChunkAndCompute();
     } else {
-        std::cout << "full\n";
         ComputeFullSimulation();
     }
 }
@@ -147,44 +146,43 @@ void Simulation::ComputeFullSimulation() {
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
     int kChunk = simulationArea.chunkDimensions.getDimSizes()[2];
     size_t simulationSize = simulationArea.simulationDimensions.getSimulationSize();
+    float * finalResult = (float*)malloc(simulationSize * sizeof(float));
 
-    cl_int err;
     cl_int errorCode;
-    cl::Buffer in_p;
-    cl::Buffer rhsBuffer;
-    cl::Buffer out_p;
+    cl::Buffer inChunkBuffer;
+    cl::Buffer rhsChunkBuffer;
+    cl::Buffer outChunkBuffer;
     if (oclSetup.deviceProperties.deviceType == CL_DEVICE_TYPE_CPU) {
-        in_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), simulationArea.p, &err);
-        ErrorHelper::testError(err, "Failed to create an in buffer"); 
-        rhsBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), simulationArea.rhs, &err);
-        ErrorHelper::testError(err, "Failed to create an rhs buffer");
-        //simulationArea.p
-        out_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
-        ErrorHelper::testError(err, "Failed to create an out buffer");
+        inChunkBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), simulationArea.p, &errorCode);
+        ErrorHelper::testError(errorCode, "Failed to create an in buffer"); 
+        rhsChunkBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), simulationArea.rhs, &errorCode);
+        ErrorHelper::testError(errorCode, "Failed to create an rhs buffer");
+        outChunkBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR , simulationSize * sizeof(float), finalResult, &errorCode);
+        ErrorHelper::testError(errorCode, "Failed to create an out buffer");
     } else {
-        in_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
-        ErrorHelper::testError(err, "Failed to create an in buffer"); 
-        rhsBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &err);
-        ErrorHelper::testError(err, "Failed to create an rhs buffer");
-        out_p = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY , simulationSize * sizeof(float), nullptr, &err);
-        ErrorHelper::testError(err, "Failed to create an out buffer");
+        inChunkBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE, simulationSize * sizeof(float), nullptr, &errorCode);
+        ErrorHelper::testError(errorCode, "Failed to create an in buffer"); 
+        rhsChunkBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_ONLY, simulationSize * sizeof(float), nullptr, &errorCode);
+        ErrorHelper::testError(errorCode, "Failed to create an rhs buffer");
+        outChunkBuffer = cl::Buffer(oclSetup.context, CL_MEM_READ_WRITE , simulationSize * sizeof(float), nullptr, &errorCode);
+        ErrorHelper::testError(errorCode, "Failed to create an out buffer");
 
-        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.event);
+        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(inChunkBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.writeSimChunk);
         ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for simulation p.");
         if (PROFILING_ENABLED == 1) {
-            oclSetup.event.wait();
-            MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+            oclSetup.writeSimChunk.wait();
+            MeasureEventPerformance(oclSetup.writeSimChunk, performanceMeasurements.clWriteToDevice);
         }
 
-        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &oclSetup.event);
+        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsChunkBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.rhs, nullptr, &oclSetup.writeRhsChunk);
         ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhs.");
         if (PROFILING_ENABLED == 1) {
-            oclSetup.event.wait();
-            MeasureEventPerformance(oclSetup.event, performanceMeasurements.clWriteToDevice);
+            oclSetup.writeRhsChunk.wait();
+            MeasureEventPerformance(oclSetup.writeRhsChunk, performanceMeasurements.clWriteToDevice);
         }
     }
    
-    oclSetup.kernel.setArg(2, rhsBuffer);
+    oclSetup.kernel.setArg(2, rhsChunkBuffer);
     oclSetup.kernel.setArg(3, iChunk);
     oclSetup.kernel.setArg(4, jChunk);
     oclSetup.kernel.setArg(5, kChunk);
@@ -192,36 +190,40 @@ void Simulation::ComputeFullSimulation() {
     cl::Buffer finalResultBuffer;
     for (int iter = 1; iter <= simulationArea.iterations; iter += 1) {
         if (iter % 2 == 0) {
-            CallKernel(out_p, in_p);
-            finalResultBuffer = in_p;
+            CallKernel(outChunkBuffer, inChunkBuffer);
+            finalResultBuffer = inChunkBuffer;
         } else {
-            CallKernel(in_p, out_p);
-            finalResultBuffer = out_p;
+            CallKernel(inChunkBuffer, outChunkBuffer);
+            finalResultBuffer = outChunkBuffer;
         }     
     }
 
-    errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.event);
-    ErrorHelper::testError(errorCode, "Failed to read back from the device");
-    if (PROFILING_ENABLED == 1) {
-        oclSetup.event.wait();
-        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clReadFromDevice);
-    }
-
-    // for (int z = 0; z < simulationSize; z++) {
-    //     std::cout << " " << simulationArea.p[z];
-    // }
-    // std::cout << "\n\n";
+    if (oclSetup.deviceProperties.deviceType == CL_DEVICE_TYPE_CPU) {
+        // CPU-only version is zero-copy. No need to enqueue read.
+        if (simulationArea.iterations % 2 != 0) {
+            float *temp = &*simulationArea.p;
+            free(temp);
+            simulationArea.p = &*finalResult;
+        }
+    } else {
+        errorCode = oclSetup.commandQueue.enqueueReadBuffer(finalResultBuffer, CL_TRUE, 0, simulationSize * sizeof(float), simulationArea.p, nullptr, &oclSetup.readEvent);
+        ErrorHelper::testError(errorCode, "Failed to read back from the device");
+        if (PROFILING_ENABLED == 1) {
+            oclSetup.readEvent.wait();
+            MeasureEventPerformance(oclSetup.readEvent, performanceMeasurements.clReadFromDevice);
+        }
+    }  
 }
 
-void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
+void Simulation::CallKernel(cl::Buffer inChunkBuffer, cl::Buffer outChunkBuffer) {
     int iHalChunk = simulationArea.halChunkDimensions.getDimSizes()[0];
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
 
     int coreArea = simulationArea.chunkDimensions.getSimulationSize();
 
-    oclSetup.kernel.setArg(0, in_p);
-    oclSetup.kernel.setArg(1, out_p);
+    oclSetup.kernel.setArg(0, inChunkBuffer);
+    oclSetup.kernel.setArg(1, outChunkBuffer);
     EnqueueKernel(INFLOW, cl::NDRange(1*jHalChunk*kHalChunk));                
     EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));               
     EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));                
@@ -231,12 +233,12 @@ void Simulation::CallKernel(cl::Buffer in_p, cl::Buffer out_p) {
     oclSetup.kernel.setArg(6, &coreState);
     cl_int errorCode;
     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(coreArea),
-        cl::NullRange, nullptr, &oclSetup.event);
+        cl::NullRange, nullptr, &oclSetup.kernelEvent);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
-    oclSetup.event.wait();
+    oclSetup.kernelEvent.wait();
 
     if (PROFILING_ENABLED == 1) {
-        MeasureEventPerformance(oclSetup.event, performanceMeasurements.clKernelExecution);
+        MeasureEventPerformance(oclSetup.kernelEvent, performanceMeasurements.clKernelExecution);
     }
 }
 
@@ -245,8 +247,6 @@ void Simulation::MeasureEventPerformance(cl::Event event, std::vector<double>& m
     cl_ulong ev_end_time=(cl_ulong)0;
     size_t return_bytes;
 
-    // clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_QUEUED,sizeof(cl_ulong),&ev_start_time, &return_bytes);
-    // clGetEventProfilingInfo(event.get(), CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &ev_end_time, &return_bytes);
     event.getProfilingInfo(CL_PROFILING_COMMAND_START, &ev_start_time);
     event.getProfilingInfo(CL_PROFILING_COMMAND_END, &ev_end_time);
     double run_time =(double)(ev_end_time - ev_start_time);
@@ -254,10 +254,7 @@ void Simulation::MeasureEventPerformance(cl::Event event, std::vector<double>& m
 }
 
 void Simulation::ChunkAndCompute() {
-    int iSimDim = simulationArea.simulationDimensions.getDimSizes()[0];
-    int jSimDim = simulationArea.simulationDimensions.getDimSizes()[1];
-    int kSimDim = simulationArea.simulationDimensions.getDimSizes()[2];
-
+    // These are the dimensions of the core simulation area, excluding the hallos.
     int iDim = simulationArea.simulationDimensions.getDimSizes()[0] - 2;
     int jDim = simulationArea.simulationDimensions.getDimSizes()[1] - 2;
     int kDim = simulationArea.simulationDimensions.getDimSizes()[2] - 2;
@@ -265,57 +262,55 @@ void Simulation::ChunkAndCompute() {
     size_t coreSize = simulationArea.simulationDimensions.getSimulationSize();
     float *p2 = NULL;
     posix_memalign((void**)&p2, 4096, coreSize*sizeof(float));
-
     float *p1 = &*simulationArea.p;
     float *rhsChunk = &*simulationArea.rhs;
     
+    // Core chunk dimensions, without hallos.
     int iChunk = simulationArea.chunkDimensions.getDimSizes()[0];
     int jChunk = simulationArea.chunkDimensions.getDimSizes()[1];
     int kChunk = simulationArea.chunkDimensions.getDimSizes()[2];
 
+    // Some values that we need to know when dealing with cases, 
+    // where the last chunk size != first n-1 chunk sizes.
     int currentIChunk = iChunk;
     int coreSizeij = iDim*jDim;
     int chunkSizeij = iChunk*jChunk;
     int noOfFullChunks = coreSizeij/chunkSizeij;
     int noOfLeftoverChunks = coreSizeij % chunkSizeij == 0 ? 0 : 1;
-    int leftoverIChunk = noOfLeftoverChunks == 1 ? (coreSizeij - noOfFullChunks*chunkSizeij)/jChunk : 0;
     int totalNoOfChunks = noOfFullChunks + noOfLeftoverChunks;
 
     int iHalChunk = simulationArea.halChunkDimensions.getDimSizes()[0];
     int jHalChunk = simulationArea.halChunkDimensions.getDimSizes()[1];
     int kHalChunk = simulationArea.halChunkDimensions.getDimSizes()[2];
 
-    int iHalChunkFullChunk = iHalChunk;
-
     size_t haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
     size_t fullHaloChunkSize = haloChunkSize;
 
-    cl_int err;
-    cl::Buffer in_p(oclSetup.context, CL_MEM_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an in buffer"); 
-    cl::Buffer rhsBuffer(oclSetup.context, CL_MEM_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an rhs buffer");                    
-    cl::Buffer out_p(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an out buffer");
-
     float *outChunk= NULL;
     posix_memalign((void**)&outChunk, 4096, haloChunkSize*sizeof(float));
-    //std::cout << "Total number of chunks " << totalNoOfChunks << "\n";
+
+    cl_int err;
+    cl::Buffer inChunkBuffer(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create a buffer for inChunkBuffer."); 
+    cl::Buffer rhsChunkBuffer(oclSetup.context, CL_MEM_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create a buffer for rhsChunkBuffer.");                    
+    cl::Buffer outChunkBuffer(oclSetup.context, CL_MEM_WRITE_ONLY , haloChunkSize * sizeof(float), nullptr, &err);
+    ErrorHelper::testError(err, "Failed to create a buffer for outChunkBuffer.");
 
     for (int n = 0; n < simulationArea.iterations; n++) {
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
             for (int j_start = 0; j_start < jDim; j_start += jChunk) {
                 for (int i_start = 0; i_start < iDim; i_start += iChunk) {
-                     std::chrono::steady_clock::time_point beginChunkSetup = std::chrono::steady_clock::now();
-                    // Logic to deal with a leftover chunk.
-                    int rhsChunkIndex = ((i_start + iChunk)/iChunk) - 1;
+                    std::chrono::steady_clock::time_point beginChunkSetup = std::chrono::steady_clock::now();
+                    int currentChunkIndex = ((i_start + iChunk)/iChunk) - 1;
 
+                    // Logic to deal with a leftover chunk.
                     if (i_start + iChunk > iDim) {
                         currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
                         iHalChunk = currentIChunk + 2;
                         simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
                         haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
-                        rhsChunkIndex = totalNoOfChunks - 1;
+                        currentChunkIndex = totalNoOfChunks - 1;
                     } 
 
                     // Above code changes simulationArea.halChunkDimensions object values; 
@@ -327,33 +322,28 @@ void Simulation::ChunkAndCompute() {
                         haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
                     }
 
-                    // This is for contiguous 1D!!! Start index to know where to start copying the chunk from the whole simulation.
+                    // The logic is for a contiguous 1D. 
+                    // 'start' value indicates where to start copying the chunk from the whole simulation.
                     int start = kHalChunk*jHalChunk*i_start;
-
                     std::chrono::steady_clock::time_point endChunkSetup = std::chrono::steady_clock::now();
                     performanceMeasurements.constructChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endChunkSetup - beginChunkSetup).count());
 
-                    // ****** openCL bit 
                     cl_int errorCode;   
-                    // If it's the very first chunk, we need to write it first; subsequent chunks are overlapped with read down below.
-                    if (rhsChunkIndex == 0) { 
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_FALSE, 0, haloChunkSize * sizeof(float), p1 + start, nullptr, &oclSetup.writeSimChunk);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_FALSE, 0, haloChunkSize * sizeof(float), rhsChunk + start, nullptr, &oclSetup.writeRhsChunk);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunk.");
-                    }
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(inChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), p1 + start, nullptr, &oclSetup.writeSimChunk);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunkBuffer.");
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhsChunk + start, nullptr, &oclSetup.writeRhsChunk);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunkBuffer.");
 
-                    // Just before calling kernels, we check if everything was written to the device.
-                    oclSetup.writeSimChunk.wait();
-                    oclSetup.writeRhsChunk.wait();
                     if (PROFILING_ENABLED == 1) {
+                        oclSetup.writeSimChunk.wait();
+                        oclSetup.writeRhsChunk.wait();
                         MeasureEventPerformance(oclSetup.writeSimChunk, performanceMeasurements.clWriteToDevice);
                         MeasureEventPerformance(oclSetup.writeRhsChunk, performanceMeasurements.clWriteToDevice);
                     }
 
-                    oclSetup.kernel.setArg(0, in_p);
-                    oclSetup.kernel.setArg(1, out_p);
-                    oclSetup.kernel.setArg(2, rhsBuffer);
+                    oclSetup.kernel.setArg(0, inChunkBuffer);
+                    oclSetup.kernel.setArg(1, outChunkBuffer);
+                    oclSetup.kernel.setArg(2, rhsChunkBuffer);
                     oclSetup.kernel.setArg(3, currentIChunk);
                     oclSetup.kernel.setArg(4, jChunk);
                     oclSetup.kernel.setArg(5, kChunk);
@@ -366,64 +356,45 @@ void Simulation::ChunkAndCompute() {
                         EnqueueKernel(OUTFLOW, cl::NDRange(1*jHalChunk*kHalChunk));
                     } 
 
-                    // top-bottom, only applies for 3D
                     if (kDim > 1) {
                         EnqueueKernel(TOPBOTTOM, cl::NDRange(iHalChunk*jHalChunk*1));
                     }
                     
-                    // Periodic applies to each chunk since we're chunking in such manner that both j sides are included.
+                    // Periodic applies to each chunk since each chunk includes both sides.
                     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
 
                     int coreState = CORE;
                     oclSetup.kernel.setArg(6, &coreState);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(currentIChunk*jChunk*kChunk),
                         cl::NullRange, nullptr, &oclSetup.kernelEvent);
-                    ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
+                    ErrorHelper::testError(errorCode, "Failed to enqueue a CORE kernel.");
                     // Ensure that core kernel computation finished before reading back.
                     oclSetup.kernelEvent.wait();
                     if (PROFILING_ENABLED == 1) {
                         MeasureEventPerformance(oclSetup.kernelEvent, performanceMeasurements.clKernelExecution);
                     }
 
-                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_FALSE, 0, haloChunkSize * sizeof(float), outChunk , nullptr, &oclSetup.readEvent);
-                    ErrorHelper::testError(errorCode, "Failed to read back from the device");
-                    // If this is the last chunk, there's nothing more to send.
-                    if (rhsChunkIndex + 1 < totalNoOfChunks) {
-                        start = kHalChunk*jHalChunk*(i_start+iChunk);
-                        if (rhsChunkIndex + 1 == noOfFullChunks && noOfLeftoverChunks == 1) {
-                            // TODO: check if changs here don't interfere with reconstruction down below.
-                            currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
-                            iHalChunk = currentIChunk + 2;
-                            simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
-                            haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
-                            //rhsChunkIndex = totalNoOfChunks - 1; is this needed
-                        }
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_FALSE, 0, haloChunkSize * sizeof(float), p1 + start, nullptr, &oclSetup.writeSimChunk);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_FALSE, 0, haloChunkSize * sizeof(float), rhsChunk + start, nullptr, &oclSetup.writeRhsChunk);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunk.");
-                    }
-
-                    // Only wait for read to finish, whether write was finished will be checked in the next chunk's loop.
-                    oclSetup.readEvent.wait();
-
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(outChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), outChunk , nullptr, &oclSetup.readEvent);
+                    ErrorHelper::testError(errorCode, "Failed to read back from the device.");
                     if (PROFILING_ENABLED == 1) {
+                        oclSetup.readEvent.wait();
                         MeasureEventPerformance(oclSetup.readEvent, performanceMeasurements.clReadFromDevice);
                     }
 
-                    // This is for contiguous 1D!!!
+                    // Reintegration of the results into the simulation.
+                    // The logic is for a contiguous 1D.
                     std::chrono::steady_clock::time_point beginReintegrate = std::chrono::steady_clock::now();
                     int bound = kHalChunk*jHalChunk;
                     int endChunk = fullHaloChunkSize - bound;
                     int startChunk = bound;
-                    int pIndex = fullHaloChunkSize-bound + (fullHaloChunkSize-bound*2)*(rhsChunkIndex-1);
+                    int pIndex = fullHaloChunkSize-bound + (fullHaloChunkSize-bound*2)*(currentChunkIndex-1);
                      
-                    if (rhsChunkIndex == 0) {
+                    if (currentChunkIndex == 0) {
                         pIndex = 0;
                         startChunk = 0;
                     }
 
-                    if (rhsChunkIndex + 1 == totalNoOfChunks) {
+                    if (currentChunkIndex + 1 == totalNoOfChunks) {
                         endChunk = fullHaloChunkSize;
                     }
 
@@ -434,34 +405,26 @@ void Simulation::ChunkAndCompute() {
                     std::copy(outChunk + startChunk, outChunk + endChunk, p2 + pIndex);
                     std::chrono::steady_clock::time_point endReintegrate = std::chrono::steady_clock::now();
                     performanceMeasurements.reintegrateChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endReintegrate - beginReintegrate).count());
-                    // std::cout << "Chunk number " << rhsChunkIndex << "\n";
-                    // for (int z = 0; z < coreSize; z++) {
-                    //     std::cout << " " << p2[z];
-                    // }
-                    // std::cout << "\n\n";
                 }
             }
         }
         
-
-        // the output array becomes our problem/input array for next iteration
+        // The output array becomes our problem/input array for next iteration.
         float *temp = &*p1;
         p1 = &*p2;
         p2 = &*temp;
     }
 
-    // Depending on the number of iterations, we might need to copy back the final result values
-    // into the user's simulation area.
+    // Depending on the number of iterations, we might need to change pointer of the 
+    // user's simulation area into the final result.
     if (simulationArea.iterations % 2 != 0 ){
-        std::copy(p1, p1 + coreSize, simulationArea.p);
-        free(p1);
-        p2 = NULL;
+        float *temp = &*simulationArea.p;
+        free(temp);
+        simulationArea.p = &*p1;
     } else {
         free(p2);
-        p1 = NULL;
     }
 
-    // Fly away and be free.
     free(outChunk);
 }
 
