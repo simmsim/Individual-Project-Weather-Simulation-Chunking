@@ -22,9 +22,10 @@ class OCLSetup {
         cl::Program program;
         cl::Kernel kernel;
         cl::CommandQueue commandQueue;
-        cl::Event event;
         cl::Event kernelEvent;
         cl::Event readEvent;
+        cl::Event writeSimChunk;
+        cl::Event writeRhsChunk;
         devicePropertiesStruct deviceProperties;
 
         OCLSetup() = default;
