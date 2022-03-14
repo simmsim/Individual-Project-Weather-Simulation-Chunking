@@ -22,8 +22,9 @@ int main(int argc, char* argv[]) {
     float maxSimulationAreaMemUsage = 100;
 
     int pSize = coreRange.getSimulationSize();
-    float *p = (float*)malloc(sizeof(float)*pSize);
-    float *rhs = (float*)malloc(sizeof(float)*pSize);
+    float *p, *rhs = NULL;
+    posix_memalign((void**)&p, 4096, pSize*sizeof(float));
+    posix_memalign((void**)&rhs, 4096, pSize*sizeof(float));
 
     generateDomain(p, rhs, coreRange);
     int err;
@@ -42,8 +43,9 @@ int main(int argc, char* argv[]) {
     }
    
    float * actualSimulationArea = simulation.getSimulationArea().p;
-   // float actualValue =  actualSimulationArea[F3D2C(ip, jp, 0,0,0, 1,1,1)];
-   // std::cout << "Value was " << actualValue << "\n";
+   int index = F3D2C(jp, kp, 0,0,0, 1,1,1);
+    float actualValue =  actualSimulationArea[index];
+    std::cout << "Value was " << actualValue << " for index " << index << "\n";
 
     char * fileName = (char *)malloc(strlen(argv[1]) + 1);
     strcpy(fileName, argv[1]);
@@ -60,6 +62,6 @@ int main(int argc, char* argv[]) {
     print_new_line_to_file(fileName);
 
     free(fileName);
-    free(p);
+    free(actualSimulationArea);
     free(rhs);
 }
