@@ -1,10 +1,7 @@
-// Contains overlap attempt (not sure it actually worked)
-// and pinning of memory so that DMA can happen. 
-// In this version, the whole simulation and rhs areas are pinned - extra copying 
-// which hurts performance although read/write is much faster...
-// This version also fails with opencl memory error
-// code when the size of the data is used is quite large (more than 500x1000x90)
-
+// Overlap is removed here
+// Pinned memory created and data placed to it at each iteration.
+// Pinned memory gives fast transfers (enabled DMA) but copying data
+// to pinned memory is too much of an overhead
 void Simulation::ChunkAndCompute() {
     int iSimDim = simulationArea.simulationDimensions.getDimSizes()[0];
     int jSimDim = simulationArea.simulationDimensions.getDimSizes()[1];
@@ -52,26 +49,16 @@ void Simulation::ChunkAndCompute() {
     cl::Buffer out_p(oclSetup.context, CL_MEM_WRITE_ONLY, bufferSize, nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an out buffer");
 
-    cl::Buffer in_p_pinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, coreSize * sizeof(float), nullptr, &err);
+    cl::Buffer in_p_pinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, bufferSize, nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an in pinned buffer");
-    cl::Buffer rhsBufferPinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, coreSize * sizeof(float), nullptr, &err);
+    cl::Buffer rhsBufferPinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, bufferSize, nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an in pinned buffer");
-    cl::Buffer out_p_pinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, coreSize * sizeof(float), nullptr, &err);
-    ErrorHelper::testError(err, "Failed to create an in pinned buffer");
-    cl::Buffer out_chunk_pinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, bufferSize, nullptr, &err);
+    cl::Buffer out_p_pinned(oclSetup.context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, bufferSize, nullptr, &err);
     ErrorHelper::testError(err, "Failed to create an in pinned buffer");
 
-    float * in_p_ptr_x = (float*)oclSetup.commandQueue.enqueueMapBuffer(in_p_pinned, CL_TRUE, CL_MAP_WRITE, 0, coreSize * sizeof(float), 0, NULL, &err);
-    float * rhs_ptr_x = (float*)oclSetup.commandQueue.enqueueMapBuffer(rhsBufferPinned, CL_TRUE, CL_MAP_WRITE, 0, coreSize * sizeof(float), 0, NULL, &err);
-    float * out_p_ptr = (float*)oclSetup.commandQueue.enqueueMapBuffer(out_p_pinned, CL_TRUE, CL_MAP_READ, 0, coreSize * sizeof(float), 0, NULL, &err);
-    float * outChunk = (float*)oclSetup.commandQueue.enqueueMapBuffer(out_chunk_pinned, CL_TRUE, CL_MAP_READ, 0, bufferSize, 0, NULL, &err);
-    std::copy(p1, p1 + coreSize, in_p_ptr_x);
-    std::copy(rhsChunk, rhsChunk + coreSize, rhs_ptr_x);
-    float *in_p_ptr = &*in_p_ptr_x;
-    float *rhs_ptr = &*rhs_ptr_x;
-
-    // float *outChunk= NULL;
-    // posix_memalign((void**)&outChunk, 4096, haloChunkSize*sizeof(float));
+    float * in_p_ptr = (float*)oclSetup.commandQueue.enqueueMapBuffer(in_p_pinned, CL_TRUE, CL_MAP_WRITE, 0, bufferSize, 0, NULL, &err);
+    float * rhs_ptr = (float*)oclSetup.commandQueue.enqueueMapBuffer(rhsBufferPinned, CL_TRUE, CL_MAP_WRITE, 0, bufferSize, 0, NULL, &err);
+    float * out_p_ptr = (float*)oclSetup.commandQueue.enqueueMapBuffer(out_p_pinned, CL_TRUE, CL_MAP_WRITE, 0, bufferSize, 0, NULL, &err);
 
     for (int n = 0; n < simulationArea.iterations; n++) {
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
@@ -100,6 +87,8 @@ void Simulation::ChunkAndCompute() {
 
                     // This is for contiguous 1D!!! Start index to know where to start copying the chunk from the whole simulation.
                     int start = kHalChunk*jHalChunk*i_start;
+                    std::copy(p1 + start, p1 + start + haloChunkSize, in_p_ptr);
+                    std::copy(rhsChunk + start, rhsChunk + start + haloChunkSize, rhs_ptr);
 
                     std::chrono::steady_clock::time_point endChunkSetup = std::chrono::steady_clock::now();
                     performanceMeasurements.constructChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endChunkSetup - beginChunkSetup).count());
@@ -107,13 +96,11 @@ void Simulation::ChunkAndCompute() {
                     // ****** openCL bit 
                     cl_int errorCode;   
                     // If it's the very first chunk, we need to write it first; subsequent chunks are overlapped with read down below.
-                    if (rhsChunkIndex == 0) { 
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_FALSE, 0, haloChunkSize * sizeof(float), in_p_ptr + start, nullptr, &oclSetup.writeSimChunk);
+                   
+                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_TRUE, 0, haloChunkSize * sizeof(float), in_p_ptr, nullptr, &oclSetup.writeSimChunk);
                         ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_FALSE, 0, haloChunkSize * sizeof(float), rhs_ptr + start, nullptr, &oclSetup.writeRhsChunk);
+                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhs_ptr, nullptr, &oclSetup.writeRhsChunk);
                         ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunk.");
-                        oclSetup.commandQueue.flush();
-                    }
 
                     // Just before calling kernels, we check if everything was written to the device.
                     oclSetup.writeSimChunk.wait();
@@ -147,7 +134,7 @@ void Simulation::ChunkAndCompute() {
                     EnqueueKernel(PERIODIC, cl::NDRange(iHalChunk*1*kHalChunk));
 
                     int coreState = CORE;
-                    oclSetup.kernel.setArg(6, &coreState);
+                    oclSetup.kernel.setArg(6, coreState);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(currentIChunk*jChunk*kChunk),
                         cl::NullRange, nullptr, &oclSetup.kernelEvent);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel with type: " + CORE);
@@ -157,26 +144,8 @@ void Simulation::ChunkAndCompute() {
                         MeasureEventPerformance(oclSetup.kernelEvent, performanceMeasurements.clKernelExecution);
                     }
 
-                    errorCode = oclSetup.commandQueue2.enqueueReadBuffer(out_p, CL_FALSE, 0, haloChunkSize * sizeof(float), outChunk , nullptr, &oclSetup.readEvent);
-                    oclSetup.commandQueue2.flush();
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(out_p, CL_TRUE, 0, haloChunkSize * sizeof(float), out_p_ptr , nullptr, &oclSetup.readEvent);
                     ErrorHelper::testError(errorCode, "Failed to read back from the device");
-                    // If this is the last chunk, there's nothing more to send.
-                    if (rhsChunkIndex + 1 < totalNoOfChunks) {
-                        start = kHalChunk*jHalChunk*(i_start+iChunk);
-                        if (rhsChunkIndex + 1 == noOfFullChunks && noOfLeftoverChunks == 1) {
-                            // TODO: check if changs here don't interfere with reconstruction down below.
-                            currentIChunk = (coreSizeij % chunkSizeij) / jChunk;
-                            iHalChunk = currentIChunk + 2;
-                            simulationArea.halChunkDimensions.updateDimSize(0, iHalChunk);
-                            haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
-                            //rhsChunkIndex = totalNoOfChunks - 1; is this needed
-                        }
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(in_p, CL_FALSE, 0, haloChunkSize * sizeof(float), in_p_ptr + start, nullptr, &oclSetup.writeSimChunk);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunk.");
-                        errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsBuffer, CL_FALSE, 0, haloChunkSize * sizeof(float), rhs_ptr + start, nullptr, &oclSetup.writeRhsChunk);
-                        ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunk.");
-                        oclSetup.commandQueue.flush();
-                    }
 
                     // Only wait for read to finish, whether write was finished will be checked in the next chunk's loop.
                     oclSetup.readEvent.wait();
@@ -205,7 +174,7 @@ void Simulation::ChunkAndCompute() {
                         endChunk = haloChunkSize;
                     }
                     
-                    std::copy(outChunk + startChunk, outChunk + endChunk, out_p_ptr + pIndex);
+                    std::copy(out_p_ptr + startChunk, out_p_ptr + endChunk, p2 + pIndex);
                     std::chrono::steady_clock::time_point endReintegrate = std::chrono::steady_clock::now();
                     performanceMeasurements.reintegrateChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endReintegrate - beginReintegrate).count());
                 }
@@ -213,32 +182,31 @@ void Simulation::ChunkAndCompute() {
         }
         
         // the output array becomes our problem/input array for next iteration
-        float *temp = in_p_ptr;
-        in_p_ptr = out_p_ptr;
-        out_p_ptr = temp;
-        // float *temp = &*p1;
-        // p1 = &*p2;
-        // p2 = &*temp;
+        float *temp = &*p1;
+        p1 = &*p2;
+        p2 = &*temp;
     }
     // Depending on the number of iterations, we might need to copy back the final result values
     // into the user's simulation area.
-    
-    std::cout << "After free stuff\n";
+    if (simulationArea.iterations % 2 != 0 ){
+        std::copy(p1, p1 + coreSize, simulationArea.p);
+        free(p1);
+        p2 = NULL;
+    } else {
+        free(p2);
+        p1 = NULL;
+    }
+
     // Fly away and be free.
     // free(outChunk);
     oclSetup.commandQueue.enqueueUnmapMemObject(in_p_pinned, in_p_ptr, 0, NULL);
     oclSetup.commandQueue.enqueueUnmapMemObject(rhsBufferPinned, rhs_ptr, 0, NULL);
     oclSetup.commandQueue.enqueueUnmapMemObject(out_p_pinned, out_p_ptr, 0, NULL);
-    // std::cout << "wut\n";
-    // if (simulationArea.iterations % 2 != 0 ){
-    //     simulationArea.p = in_p_ptr;
-    // } else {
-    //     simulationArea.p = out_p_ptr;
-    // }
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
-    oclSetup.kernel.setArg(6, &type);
+    oclSetup.kernel.setArg(6, type);
     cl_int errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, range, cl::NullRange, nullptr);
     ErrorHelper::testError(errorCode, "Failed to enqueue a kernel for a condition");
 }
+
