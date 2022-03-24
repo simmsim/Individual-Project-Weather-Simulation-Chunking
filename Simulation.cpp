@@ -134,7 +134,7 @@ void Simulation::ProcessSimulation() {
         ChunkAndCompute();
     } else {
         ComputeFullSimulation();
-    }
+    } 
 }
 
 bool Simulation::IsSimulationChunked() {
@@ -182,6 +182,7 @@ void Simulation::ComputeFullSimulation() {
         }
     }
    
+    // The correct arguments should be 3, kChunk and 5, iChunk
     oclSetup.kernel.setArg(2, rhsChunkBuffer);
     oclSetup.kernel.setArg(3, iChunk);
     oclSetup.kernel.setArg(4, jChunk);
@@ -286,16 +287,18 @@ void Simulation::ChunkAndCompute() {
     size_t haloChunkSize = simulationArea.halChunkDimensions.getSimulationSize();
     size_t fullHaloChunkSize = haloChunkSize;
 
-    float *outChunk= NULL;
-    posix_memalign((void**)&outChunk, 4096, haloChunkSize*sizeof(float));
-
     cl_int err;
-    cl::Buffer inChunkBuffer(oclSetup.context, CL_MEM_READ_WRITE, haloChunkSize * sizeof(float), nullptr, &err);
+    cl::Buffer inChunkBuffer(oclSetup.context, CL_MEM_READ_WRITE , haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create a buffer for inChunkBuffer."); 
     cl::Buffer rhsChunkBuffer(oclSetup.context, CL_MEM_READ_ONLY, haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create a buffer for rhsChunkBuffer.");                    
     cl::Buffer outChunkBuffer(oclSetup.context, CL_MEM_WRITE_ONLY , haloChunkSize * sizeof(float), nullptr, &err);
     ErrorHelper::testError(err, "Failed to create a buffer for outChunkBuffer.");
+
+    cl::Event writeSimEvents[totalNoOfChunks];
+    cl::Event writeRhsEvents[totalNoOfChunks];
+    cl::Event readEvents[totalNoOfChunks];
+    cl::Event kernelEvents[totalNoOfChunks];
 
     for (int n = 0; n < simulationArea.iterations; n++) {
         for (int k_start = 0; k_start < kDim; k_start += kChunk) {  
@@ -329,16 +332,16 @@ void Simulation::ChunkAndCompute() {
                     performanceMeasurements.constructChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endChunkSetup - beginChunkSetup).count());
 
                     cl_int errorCode;   
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(inChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), p1 + start, nullptr, &oclSetup.writeSimChunk);
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(inChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), p1 + start, nullptr, &writeSimEvents[currentChunkIndex]);
                     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for inChunkBuffer.");
-                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhsChunk + start, nullptr, &oclSetup.writeRhsChunk);
+                    errorCode = oclSetup.commandQueue.enqueueWriteBuffer(rhsChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), rhsChunk + start, nullptr, &writeRhsEvents[currentChunkIndex]);
                     ErrorHelper::testError(errorCode, "Failed to enqueue write buffer for rhsChunkBuffer.");
 
                     if (PROFILING_ENABLED == 1) {
-                        oclSetup.writeSimChunk.wait();
-                        oclSetup.writeRhsChunk.wait();
-                        MeasureEventPerformance(oclSetup.writeSimChunk, performanceMeasurements.clWriteToDevice);
-                        MeasureEventPerformance(oclSetup.writeRhsChunk, performanceMeasurements.clWriteToDevice);
+                        writeSimEvents[currentChunkIndex].wait();
+                        writeRhsEvents[currentChunkIndex].wait();
+                        MeasureEventPerformance(writeSimEvents[currentChunkIndex], performanceMeasurements.clWriteToDevice);
+                        MeasureEventPerformance(writeRhsEvents[currentChunkIndex], performanceMeasurements.clWriteToDevice);
                     }
 
                     oclSetup.kernel.setArg(0, inChunkBuffer);
@@ -366,29 +369,21 @@ void Simulation::ChunkAndCompute() {
                     int coreState = CORE;
                     oclSetup.kernel.setArg(6, &coreState);
                     errorCode = oclSetup.commandQueue.enqueueNDRangeKernel(oclSetup.kernel, cl::NullRange, cl::NDRange(currentIChunk*jChunk*kChunk),
-                        cl::NullRange, nullptr, &oclSetup.kernelEvent);
+                        cl::NullRange, nullptr,  &kernelEvents[currentChunkIndex]);
                     ErrorHelper::testError(errorCode, "Failed to enqueue a CORE kernel.");
                     // Ensure that core kernel computation finished before reading back.
-                    oclSetup.kernelEvent.wait();
+                    kernelEvents[currentChunkIndex].wait();
                     if (PROFILING_ENABLED == 1) {
-                        MeasureEventPerformance(oclSetup.kernelEvent, performanceMeasurements.clKernelExecution);
+                        MeasureEventPerformance(kernelEvents[currentChunkIndex], performanceMeasurements.clKernelExecution);
                     }
 
-                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(outChunkBuffer, CL_TRUE, 0, haloChunkSize * sizeof(float), outChunk , nullptr, &oclSetup.readEvent);
-                    ErrorHelper::testError(errorCode, "Failed to read back from the device.");
-                    if (PROFILING_ENABLED == 1) {
-                        oclSetup.readEvent.wait();
-                        MeasureEventPerformance(oclSetup.readEvent, performanceMeasurements.clReadFromDevice);
-                    }
-
-                    // Reintegration of the results into the simulation.
-                    // The logic is for a contiguous 1D.
-                    std::chrono::steady_clock::time_point beginReintegrate = std::chrono::steady_clock::now();
+                    // Various values that help us to determine the correct offsets, sizes and limits when
+                    // reading back from the device straight to the output simulation array.
                     int bound = kHalChunk*jHalChunk;
                     int endChunk = fullHaloChunkSize - bound;
                     int startChunk = bound;
                     int pIndex = fullHaloChunkSize-bound + (fullHaloChunkSize-bound*2)*(currentChunkIndex-1);
-                     
+                    
                     if (currentChunkIndex == 0) {
                         pIndex = 0;
                         startChunk = 0;
@@ -401,10 +396,16 @@ void Simulation::ChunkAndCompute() {
                     if (noOfLeftoverChunks == 1) {
                         endChunk = haloChunkSize;
                     }
-                    
-                    std::copy(outChunk + startChunk, outChunk + endChunk, p2 + pIndex);
-                    std::chrono::steady_clock::time_point endReintegrate = std::chrono::steady_clock::now();
-                    performanceMeasurements.reintegrateChunk.push_back(std::chrono::duration_cast<std::chrono::nanoseconds> (endReintegrate - beginReintegrate).count());
+
+                    int readBackSize = endChunk*sizeof(float) - startChunk*sizeof(float);
+
+                    // We're are reading back directly into the simulation output array - reading and reintegration are combined.
+                    errorCode = oclSetup.commandQueue.enqueueReadBuffer(outChunkBuffer, CL_TRUE, startChunk*sizeof(float), readBackSize, p2 + pIndex , nullptr, &readEvents[currentChunkIndex]);
+                    ErrorHelper::testError(errorCode, "Failed to read back from the device.");
+                    if (PROFILING_ENABLED == 1) {
+                        readEvents[currentChunkIndex].wait();
+                        MeasureEventPerformance(readEvents[currentChunkIndex], performanceMeasurements.clReadFromDevice);
+                    }
                 }
             }
         }
@@ -424,8 +425,6 @@ void Simulation::ChunkAndCompute() {
     } else {
         free(p2);
     }
-
-    free(outChunk);
 }
 
 void Simulation::EnqueueKernel(int type, cl::NDRange range) {
