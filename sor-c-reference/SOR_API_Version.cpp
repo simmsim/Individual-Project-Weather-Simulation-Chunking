@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     posix_memalign((void**)&p, 4096, pSize*sizeof(float));
     posix_memalign((void**)&rhs, 4096, pSize*sizeof(float));
 
-    generateDomain(p, rhs, coreRange);
+    generateSimpleDomain(p, rhs, coreRange);
     int err;
     std::chrono::steady_clock::time_point beginWithSetup = std::chrono::steady_clock::now();
     Simulation simulation = Simulation(deviceType, programFileName, kernelName, &err);
@@ -42,10 +42,14 @@ int main(int argc, char* argv[]) {
         return -1;
     }
    
-   float * actualSimulationArea = simulation.getSimulationArea().p;
-   int index = F3D2C(jp, kp, 0,0,0, 1,1,1);
+    float * actualSimulationArea = simulation.getSimulationArea().p;
+    int index = F3D2C(kp, jp, 0,0,0, 1,1,1);
     float actualValue =  actualSimulationArea[index];
-    std::cout << "Value was " << actualValue << " for index " << index << "\n";
+    // std::cout << "Value was " << actualValue << " for index " << index << "\n";
+    // for (int i = 0; i < pSize; i++) {
+    //     std::cout << " " << actualSimulationArea[i];
+    // }
+    // std::cout << "\n";
 
     char * fileName = (char *)malloc(strlen(argv[1]) + 1);
     strcpy(fileName, argv[1]);
