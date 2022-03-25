@@ -36,3 +36,5 @@ To clean up the executables:
 ```
 $ make clean
 ```
+## Other Notes
+Older than 2.0 versions of OpenCL seem to fail execution if the state code for the kernel is a pointer. If kernel execution is failing with vague errors, try changing the state code from a pointer to a simple int.
