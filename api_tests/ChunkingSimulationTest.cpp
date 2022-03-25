@@ -6,6 +6,10 @@
 #include <string>
 #include <chrono>
 
+// DISCLAIMER - the test values are outdated - there were numerous changes done.
+// TODO: update these tests
+// TESTING DONE ON SERVER by doing evaluation...
+
 int deviceType = CPU;
 int halo = 1; // 1-point halo
 char * programFileName = (char*) "../sor_kernel.cl";
