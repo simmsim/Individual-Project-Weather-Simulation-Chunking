@@ -18,86 +18,58 @@ inline unsigned int F3D2C(unsigned int i_rng, unsigned int j_rng, // ranges, i.e
 
 /*
 Compute the periodic condition, i.e. initialize side halos
-p_in(0, i, 0, k) = p_in(0, i, jp, k)
-p_in(0, i, jp+1, k) = p_in(0, i, 1, k)
 */
-void compute_periodic_condition(__global float *p_in, int ip, int jp) 
+void compute_periodic_condition(__global float *p_in, int kp, int jp) 
 {    
     int global_id = get_global_id(0);
-    int i_range = ip + 2;
-    int k = global_id/i_range;
-    int i = global_id-(k*i_range);
-    
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,0,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp,k)];
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,jp+1,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,1,k)];
 
-    /*
-    // Alternative
-    int i = get_global_id(0);
-    int k = get_global_id(2);
-    */
+    int k_range = kp + 2;
+    int i = global_id/k_range;
+    int k = global_id-(i*k_range);
+    
+    p_in[F3D2C(kp+2, jp+2, 0,0,0, k,0,i)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, k,jp,i)];
+    p_in[F3D2C(kp+2, jp+2, 0,0,0, k,jp+1,i)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, k,1,i)];
 }
 
 /*
 Compute the open condition for the out-flow plane
-p_in(0, ip+1, j, k) = p_in(0, ip, j, k)
 */
-void compute_outflow_condition(__global float *p_in, int ip, int jp) 
+void compute_outflow_condition(__global float *p_in, int ip, int jp, int kp) 
 {
     int global_id = get_global_id(0);
     int j_range = jp + 2;
     int k = global_id/j_range;
     int j = global_id-(k*j_range);
+    
 
-   p_in[F3D2C(ip+2, jp+2, 0,0,0, ip+1,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, ip,j,k)]; 
-
-    /*
-    // Alternative
-    int j = get_global_id(1);
-    int k = get_global_id(2);
-    */
+   p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,ip+1)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,ip)]; 
 }
 
 /*
 Compute the open condition for the in-flow plane
-p_in(0, 0, j, k) = p_in(0, 1, j, k)
 */
-void compute_inflow_condition(__global float *p_in, int ip, int jp) 
+void compute_inflow_condition(__global float *p_in, int ip, int jp, int kp) 
 {
     int global_id = get_global_id(0);
     int j_range = jp + 2;
     int k = global_id/j_range;
     int j = global_id-(k*j_range);
 
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, 0,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, 1,j,k)]; 
-   
-    /*
-    // Alternative
-    int j = get_global_id(1);
-    int k = get_global_id(2);
-    */
+    p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,0)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,1)]; 
 }
 
 /* 
 Compute the open condition for top and bottom planes
-p_in(0, i, j, 0) = p(0, i, j, 1)
-p_in(0, i, j, kp+1) = p_in(0, i, j, kp)
 */
 void compute_top_bottom_conditions(__global float *p_in, int ip, int jp, int kp)  
 {
     int global_id = get_global_id(0);
-    int i_range = ip + 2;
-    int j = global_id/i_range;
-    int i = global_id-(j*i_range);
+    int j_range = jp + 2;
+    int i = global_id/j_range;
+    int j = global_id-(i*j_range);
 
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,0)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,1)];
-    p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,kp+1)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,kp)];
-    
-    /*
-    // Alternative
-    int i = get_global_id(0);
-    int j = get_global_id(1);
-    */
+    p_in[F3D2C(kp+2, jp+2, 0,0,0, 0,j,i)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, 1,j,i)];
+    p_in[F3D2C(kp+2, jp+2, 0,0,0, kp+1,j,i)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, kp,j,i)];
 }
 
 void compute_core_region(__global float *p_in, __global float *p_out, __global float *rhs, int ip, int jp, int kp) 
@@ -110,34 +82,31 @@ void compute_core_region(__global float *p_in, __global float *p_out, __global f
     const float cn4l = 0.5;
     const float cn4s = 0.5;
     const float omega = 1.0;
-    /*
-    // Alternative
-    int i = get_global_id(0);
-    int j = get_global_id(1);
-    int k = get_global_id(2);
-    */
+
     int global_id = get_global_id(0);
-    int i_range = ip;
+    int k_range = kp;
     int j_range = jp;
 
-    int k_rel = global_id/(j_range*i_range);
-    int k = k_rel + 1;
-    int j_rel = ((global_id-(k_rel*(j_range*i_range)))/i_range);
-    int j = j_rel + 1;
-    int i_rel = ((global_id-(k_rel*(j_range*i_range)))-(j_rel*i_range));
+    int i_rel = global_id/(j_range*k_range);
     int i = i_rel + 1;
-    
+
+    int j_rel = ((global_id-(i_rel*(j_range*k_range)))/k_range);
+    int j = j_rel + 1;
+
+    int k_rel = global_id - i_rel*(j_range*k_range) - j_rel*k_range;
+    int k = k_rel + 1;
+
     float relmtp = omega*(cn1*(
-        cn2l*p_in[F3D2C(ip+2, jp+2, 0,0,0, i+1,j,k)] +
-        cn2s*p_in[F3D2C(ip+2, jp+2, 0,0,0, i-1,j,k)] +
-        cn3l*p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j+1,k)] +
-        cn3s*p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j-1,k)] +
-        cn4l*p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k+1)] +
-        cn4s*p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k-1)] -
-        rhs[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)]) - 
-        p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)]);
+        cn2l*p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,i+1)] +
+        cn2s*p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,i-1)] +
+        cn3l*p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j+1,i)] +
+        cn3s*p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j-1,i)] +
+        cn4l*p_in[F3D2C(kp+2, jp+2, 0,0,0, k+1,j,i)] +
+        cn4s*p_in[F3D2C(kp+2, jp+2, 0,0,0, k-1,j,i)] -
+        rhs[F3D2C(kp+2, jp+2, 0,0,0, k,j,i)]) - 
+        p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,i)]);
     
-    p_out[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] = p_in[F3D2C(ip+2, jp+2, 0,0,0, i,j,k)] + relmtp;
+    p_out[F3D2C(kp+2, jp+2, 0,0,0, k,j,i)] = p_in[F3D2C(kp+2, jp+2, 0,0,0, k,j,i)] + relmtp;
 }
 
 __kernel void sor_superkernel(__global float *p_in, __global float *p_out, __global float *rhs,
@@ -149,13 +118,13 @@ __kernel void sor_superkernel(__global float *p_in, __global float *p_out, __glo
             compute_core_region(p_in, p_out, rhs, iChunk, jChunk, kChunk);
             break;
         case PERIODIC:
-            compute_periodic_condition(p_in, iChunk, jChunk);
+            compute_periodic_condition(p_in, kChunk, jChunk);
             break;
         case INFLOW:
-            compute_inflow_condition(p_in, iChunk, jChunk);
+            compute_inflow_condition(p_in, iChunk, jChunk, kChunk);
             break;
         case OUTFLOW:
-            compute_outflow_condition(p_in, iChunk, jChunk);
+            compute_outflow_condition(p_in, iChunk, jChunk, kChunk);
             break;
         case TOPBOTTOM:
             compute_top_bottom_conditions(p_in, iChunk, jChunk, kChunk);
