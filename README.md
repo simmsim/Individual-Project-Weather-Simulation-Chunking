@@ -16,3 +16,23 @@ $ ./runApiVersion.sh
 Make sure that the user has the executable rights on the script.
 
 The script will run SOR_API_Version located in simulation_runners/ in which the synthetic simulation data is generated and where the call to run the simulation is made. SOR_API_Version also prints performance execution times to a log file, which at the end of the processing is scanned by bashcript which calculates average values.
+
+## Unit Tests
+
+There is a set of test suites in the unit_tests/ folder: `ChunkingSimulationTest.cpp`, `OCLSetupTest.cpp`, `SimulationRangeTest.cpp`. They can be used to confirm the correctness of various parts of the program. To run a single test suite, for example, ChunkingSimulationTest.cpp:
+```
+$ make ChunkingSimulationTest
+$ ./ChunkingSimulationTest
+```
+
+To run all test suites:
+```
+$ make
+$ make run
+```
+After running tests, you should get an output in the console specifying which tests succeeded and which of them failed. If a test fails, the output will indicate what was the expected value and what it actually got.
+
+To clean up the executables:
+```
+$ make clean
+```
