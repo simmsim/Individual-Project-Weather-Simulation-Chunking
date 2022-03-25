@@ -75,15 +75,15 @@ fileNameStem="apiVersionLog_"
 location="../performance_testing/api_version/"
 fileName="${fileNameStem}${deviceName}_${timestamp}.txt"
 
-numberOfRuns=5
+numberOfRuns=1
 numberOfIterations=1
 # 0 for CPU and 1 for GPU
 device=0
-ip=602
-jp=602
+ip=1002
+jp=1002
 kp=92
-cip=300
-cjp=600
+cip=500
+cjp=1000
 ckp=90
 
 numberOfRunsDescription="Number of runs ${numberOfRuns}"

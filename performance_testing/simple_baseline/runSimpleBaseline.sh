@@ -29,11 +29,11 @@ fileNameStem="simpleBaselineLog_"
 location="../performance_testing/simple_baseline/"
 fileName="${fileNameStem}${timestamp}.txt"
 
-numberOfRuns=5
-numberOfIterations=50
-ip=64
-jp=64
-kp=64
+numberOfRuns=1
+numberOfIterations=1
+ip=1000
+jp=1000
+kp=90
 
 numberOfRunsDescription="Number of runs ${numberOfRuns}"
 numberOfIterationsDescription="Number of iterations ${numberOfIterations}"
