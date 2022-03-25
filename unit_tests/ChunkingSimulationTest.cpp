@@ -6,10 +6,6 @@
 #include <string>
 #include <chrono>
 
-// DISCLAIMER - the test values are outdated - there were numerous changes done.
-// TODO: update these tests
-// TESTING DONE ON SERVER by doing evaluation...
-
 int deviceType = CPU;
 int halo = 1; // 1-point halo
 char * programFileName = (char*) "../sor_kernel.cl";
@@ -41,7 +37,7 @@ void testChunkDimensionsRecalculated() {
     // the dimension vlaue calculated will be machine specific, since calculation is based on the amount
     // of available data
     int expectedDimensionValue = 30;
-    float expectedValue = -0.166636;
+    float expectedValue = -0.165622;
 
     // ACT
     Simulation simulation = initializeAndRun(p, rhs, coreRange, chunkRange, iterations, maxSimulationAreaMemUsage);
@@ -59,7 +55,7 @@ void testChunkDimensionsRecalculated() {
                 "testChunkDimensionsRecalculated: simulation area has been computed correctly.");
 
     // TEARDOWN
-    free(p);
+    free(actualSimulationArea);
     free(rhs);
 }
 
@@ -74,8 +70,8 @@ void testChunkingSetup(SimulationRange chunkRange, std::string testName) {
     // ACT
     Simulation simulation = initializeAndRun(p, rhs, simulationRange, chunkRange, iterations);
     // EXPECTED
-    float expectedTopLeftValue = -0.166636;
-    float expectedBottomRightValue = -0.180353;
+    float expectedTopLeftValue = -0.165622;
+    float expectedBottomRightValue = -0.180549;
     
     // ASSERT
     float * actualSimulationArea = simulation.getSimulationArea().p;
@@ -86,7 +82,7 @@ void testChunkingSetup(SimulationRange chunkRange, std::string testName) {
     assertEquals(expectedBottomRightValue, actualBottomRightValue, testName + ": check for bottom right value");
 
     // TEARDOWN
-    free(p);
+    free(actualSimulationArea);
     free(rhs);
 }
 
