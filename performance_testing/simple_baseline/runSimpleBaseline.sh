@@ -50,17 +50,17 @@ echo "${numberOfIterationsDescription}"
 echo "${dimensionsDescription}"
 
 ### Save dimension properties to param file
-propertiesFile="../../sor-c-reference/sor_params.h"
+propertiesFile="../../simulation-runners/sor_params.h"
 echo "const int ip = ${ip};" > ${propertiesFile}
 echo "const int jp = ${jp};" >> ${propertiesFile}
 echo "const int kp = ${kp};" >> ${propertiesFile}
 
 ### Compile
-g++ -std=c++11 -O3 ../../sor-c-reference/SOR_Simple_Baseline.cpp -o ../../sor-c-reference/SOR_Simple_Baseline
+g++ -std=c++11 -O3 ../../simulation-runners/SOR_Simple_Baseline.cpp -o ../../simulation-runners/SOR_Simple_Baseline
 
 ### Run
 for ((i=0; i<$numberOfRuns; i++)); do 
-    ../../sor-c-reference/./SOR_Simple_Baseline "$fileName" "$numberOfIterations"
+    ../../simulation-runners/./SOR_Simple_Baseline "$fileName" "$numberOfIterations"
 done
 
 ### Print out whether the file creation succeeded - doesn't check for content
@@ -73,4 +73,4 @@ else
 fi
 
 ### Cleanup
-rm ../../sor-c-reference/SOR_Simple_Baseline
+rm ../../simulation-runners/SOR_Simple_Baseline

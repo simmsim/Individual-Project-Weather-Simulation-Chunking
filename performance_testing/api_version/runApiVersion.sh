@@ -76,13 +76,13 @@ location="../performance_testing/api_version/"
 fileName="${fileNameStem}${deviceName}_${timestamp}.txt"
 
 numberOfRuns=1
-numberOfIterations=1
+numberOfIterations=5
 # 0 for CPU and 1 for GPU
 device=0
 ip=1002
 jp=1002
 kp=92
-cip=500
+cip=1000
 cjp=1000
 ckp=90
 
@@ -105,7 +105,7 @@ echo "${coreDimensionsDescription}"
 echo "${chunkDimensionsDescription}"
 
 ### Save dimension properties to param file
-propertiesFile="../../sor-c-reference/sor_api_params.h"
+propertiesFile="../../simulation-runners/sor_api_params.h"
 echo "const int ip = ${ip};" > ${propertiesFile}
 echo "const int jp = ${jp};" >> ${propertiesFile}
 echo "const int kp = ${kp};" >> ${propertiesFile}
@@ -115,11 +115,11 @@ echo "const int ckp = ${ckp};" >> ${propertiesFile}
 
 ### Compile
 ### Add -DMEASURE_EVENT_PERFORMANCE if want to measure execution time of OpenCL events
-g++ -std=c++11 -O3 -DMEASURE_EVENT_PERFORMANCE ../../sor-c-reference/SOR_API_Version.cpp -o ../../sor-c-reference/SOR_API_Version ../../Simulation.cpp ../../OCLSetup.cpp ../../ErrorHelper.cpp -lOpenCL
+g++ -std=c++11 -O3 -DMEASURE_EVENT_PERFORMANCE ../../simulation-runners/SOR_API_Version.cpp -o ../../simulation-runners/SOR_API_Version ../../Simulation.cpp ../../OCLSetup.cpp ../../ErrorHelper.cpp -lOpenCL
 
 ### Run
 for ((i=0; i<$numberOfRuns; i++)); do 
-    ../../sor-c-reference/./SOR_API_Version "$fileName" "$numberOfIterations" "$device"
+    ../../simulation-runners/./SOR_API_Version "$fileName" "$numberOfIterations" "$device"
 done
 
 ### Print out whether the file creation succeeded - doesn't check for content
@@ -134,4 +134,4 @@ else
 fi
 
 ### Cleanup
-rm ../../sor-c-reference/SOR_API_Version
+rm ../../simulation-runners/SOR_API_Version
